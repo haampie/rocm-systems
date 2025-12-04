@@ -337,7 +337,7 @@ TEST_CASE("Unit__hip_cvt_e8m0_to_bf16raw") {
     if (std::isnan(exp[i])) {
       REQUIRE(std::isnan(out[i]));
     } else {
-      REQUIRE_THAT(out[i], Catch::WithinAbs(exp[i], 1e-6f) || Catch::WithinRel(exp[i], 1e-3f));
+      REQUIRE_THAT(out[i], Catch::Matchers::WithinAbs(exp[i], 1e-6f) || Catch::Matchers::WithinRel(exp[i], 1e-3f));
     }
   }
 }

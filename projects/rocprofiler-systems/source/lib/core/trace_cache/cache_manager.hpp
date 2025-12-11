@@ -27,8 +27,6 @@
 #include "core/trace_cache/sample_type.hpp"
 #include "core/trace_cache/storage_parser.hpp"
 
-#include "library/runtime.hpp"
-
 #include <memory>
 #include <unistd.h>
 
@@ -50,22 +48,17 @@ class cache_manager
 public:
     static cache_manager& get_instance();
     buffer_storage_t&     get_buffer_storage() { return m_storage; }
-    metadata_registry&    get_metadata_registry() { return *m_metadata; }
+    metadata_registry_t&  get_metadata_registry() { return *m_metadata; }
     void                  shutdown();
     void                  post_process_bulk();
 
 private:
-    cache_manager() = default;
-
-    buffer_storage_t m_storage{ utility::get_buffered_storage_filename(
-        get_root_process_id(), getpid()) };
-
-    std::shared_ptr<metadata_registry> m_metadata{
-        std::make_shared<metadata_registry>()
-    };
+    cache_manager(std::string buffer_filename, std::string metadata_filename);
+    buffer_storage_t                     m_storage;
+    std::shared_ptr<metadata_registry_t> m_metadata;
 };
 
-inline metadata_registry&
+inline metadata_registry_t&
 get_metadata_registry()
 {
     return cache_manager::get_instance().get_metadata_registry();

@@ -242,10 +242,10 @@ dispatch_in_time_sample(size_t category_enum_id, const in_time_sample& _sample,
 }  // namespace
 
 perfetto_processor_t::perfetto_processor_t(
-    const std::shared_ptr<metadata_registry>& metadata,
+    const std::shared_ptr<metadata_storage_t>& metadata,
     const std::shared_ptr<agent_manager>& agent_mngr, int pid, int ppid)
 : processor_t<perfetto_processor_t>()
-, m_metadata(*metadata)
+, m_metadata(metadata)
 , m_process_id(pid)
 , m_parrent_pid(ppid)
 , m_agent_manager(*agent_mngr)
@@ -460,7 +460,7 @@ perfetto_processor_t::handle([[maybe_unused]] const kernel_dispatch_sample& _kds
         return JOIN("", "GPU Kernel Dispatch [", _device_id_v, "] Queue ", _queue_id_v);
     };
 
-    auto kernel_symbol = m_metadata.get_kernel_symbol(_kds.kernel_id);
+    auto kernel_symbol = m_metadata->get_kernel_symbol(_kds.kernel_id);
     auto _agent_device_id =
         m_agent_manager.get_agent_by_handle(_kds.agent_id_handle).device_id;
     auto _queue_id_handle = _kds.queue_id_handle;
@@ -527,7 +527,7 @@ perfetto_processor_t::handle([[maybe_unused]] const memory_copy_sample& _mcs)
         m_agent_manager.get_agent_by_handle(_mcs.src_agent_id_handle).logical_node_id;
     auto _dst_agent_log_node_id =
         m_agent_manager.get_agent_by_handle(_mcs.dst_agent_id_handle).logical_node_id;
-    auto _name = std::string{ m_metadata.get_buffer_name_info().at(
+    auto _name = std::string{ m_metadata->get_buffer_name_info().at(
         static_cast<rocprofiler_buffer_tracing_kind_t>(_mcs.kind),
         static_cast<rocprofiler_tracing_operation_t>(_mcs.operation)) };
 

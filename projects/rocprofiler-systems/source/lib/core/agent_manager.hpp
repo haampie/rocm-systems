@@ -40,7 +40,7 @@ struct agent_manager
     agent_manager& operator=(agent_manager&&)      = delete;
     ~agent_manager()                               = default;
 
-    void         insert_agent(agent& agent);
+    std::shared_ptr<agent> insert_agent(agent& agent);
     const agent& get_agent_by_type_index(size_t type_index, agent_type type) const;
     const agent& get_agent_by_id(size_t device_id, agent_type type) const;
     const agent& get_agent_by_handle(size_t device_handle, agent_type type) const;

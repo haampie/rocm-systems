@@ -39,7 +39,7 @@ agent_manager::agent_manager(std::vector<std::shared_ptr<agent>> agents)
 : _agents(std::move(agents))
 {}
 
-void
+std::shared_ptr<agent>
 agent_manager::insert_agent(agent& _agent)
 {
     ROCPROFSYS_VERBOSE(
@@ -50,7 +50,8 @@ agent_manager::insert_agent(agent& _agent)
 
     _agent.device_type_index =
         (_agent.type == agent_type::GPU ? _gpu_agents_cnt++ : _cpu_agents_cnt++);
-    _agents.emplace_back(std::make_shared<agent>(_agent));
+    _agents.push_back(std::make_shared<agent>(_agent));
+    return _agents.back();
 }
 
 const agent&

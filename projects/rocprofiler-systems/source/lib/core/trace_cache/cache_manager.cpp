@@ -182,19 +182,19 @@ struct enabled_formats_t
 struct processor_config_t
 {
     processor_config_t(pid_t pid, pid_t ppid,
-                       std::shared_ptr<metadata_registry> metadata_registry_ptr,
-                       std::shared_ptr<agent_manager>     agent_manager_ptr)
+                       std::shared_ptr<metadata_storage_t> metadata_storage_ptr,
+                       std::shared_ptr<agent_manager>      agent_manager_ptr)
     : _pid(pid)
     , _ppid(ppid)
-    , _metadata_registry(std::move(metadata_registry_ptr))
+    , _metadata_storage(std::move(metadata_storage_ptr))
     , _agent_manager(std::move(agent_manager_ptr))
     {}
 
     pid_t _pid;
     pid_t _ppid;
 
-    std::shared_ptr<metadata_registry> _metadata_registry;
-    std::shared_ptr<agent_manager>     _agent_manager;
+    std::shared_ptr<metadata_storage_t> _metadata_storage;
+    std::shared_ptr<agent_manager>      _agent_manager;
 };
 
 struct processor_storage_t
@@ -286,7 +286,7 @@ get_cache_files(const pid_t&                   root_pid,
         }
 
         const std::regex buff_regex(R"(buffered_storage_(\d+)_(\d+)\.bin)");
-        const std::regex meta_regex(R"(metadata_(\d+)_(\d+)\.json)");
+        const std::regex meta_regex(R"(metadata_(\d+)_(\d+)\.bin)");
         std::smatch      match;
 
         if(std::regex_match(filename, match, buff_regex))
@@ -420,14 +420,14 @@ configure_processors(const std::shared_ptr<sample_processor_t>&       _type_proc
     if(_enabled_formats.is_rocpd_enabled())
     {
         processor_storage.rocpd_processor = std::make_shared<rocpd_processor_t>(
-            _processor_config->_metadata_registry, _processor_config->_agent_manager,
+            _processor_config->_metadata_storage, _processor_config->_agent_manager,
             _processor_config->_pid, _processor_config->_ppid);
         _type_processing->add_handler(*processor_storage.rocpd_processor);
     }
     if(_enabled_formats.is_perfetto_enabled())
     {
         processor_storage.perfetto_processor = std::make_shared<perfetto_processor_t>(
-            _processor_config->_metadata_registry, _processor_config->_agent_manager,
+            _processor_config->_metadata_storage, _processor_config->_agent_manager,
             _processor_config->_pid, _processor_config->_ppid);
         _type_processing->add_handler(*processor_storage.perfetto_processor);
     }
@@ -460,10 +460,8 @@ std::vector<std::shared_ptr<data::processor_config_t>>
 create_processor_configs(const data::mapped_cache_files_t& _cache_files,
                          const pid_t&                      _root_pid)
 {
-    constexpr size_t ROOT_PROCESS_INCREMENT{ 1 };
-
     std::vector<std::shared_ptr<data::processor_config_t>> processor_configs;
-    processor_configs.reserve(_cache_files.size() + ROOT_PROCESS_INCREMENT);
+    processor_configs.reserve(_cache_files.size());
 
     for(const auto& [pid, files] : _cache_files)
     {
@@ -472,14 +470,24 @@ create_processor_configs(const data::mapped_cache_files_t& _cache_files,
             continue;
         }
 
+        auto _metadata_storage = std::make_shared<metadata_storage_t>();
+
+        storage_parser<info::metadata_identifier_t, info::process, info::pmc,
+                       info::thread, info::track, info::queue, info::stream,
+                       info::string_entry, info::code_object, info::kernel_symbol,
+                       info::process_start_time, info::process_end_time, info::agent_t>
+            _metadata_parser(files.metadata);
+
         std::vector<std::shared_ptr<agent>> _agents;
-        auto _metadata = std::make_shared<metadata_registry>();
-        _metadata->load_from_file(files.metadata, _agents);
+
+        auto _metadata_parser_handler =
+            std::make_shared<metadata_parser_handler_t>(_metadata_storage, _agents);
+        _metadata_parser.load(_metadata_parser_handler);
 
         auto _agent_manager = std::make_shared<agent_manager>(_agents);
 
         processor_configs.push_back(std::make_shared<data::processor_config_t>(
-            pid, _root_pid, _metadata, _agent_manager));
+            pid, _root_pid, _metadata_storage, _agent_manager));
     }
     return processor_configs;
 }
@@ -544,9 +552,17 @@ dispatch_processing(
 cache_manager&
 cache_manager::get_instance()
 {
-    static cache_manager instance;
+    static cache_manager instance{
+        utility::get_buffered_storage_filename(get_root_process_id(), getpid()),
+        utility::get_metadata_filepath(get_root_process_id(), getpid())
+    };
     return instance;
 }
+
+cache_manager::cache_manager(std::string buffer_filename, std::string metadata_filename)
+: m_storage(std::move(buffer_filename))
+, m_metadata(std::make_shared<metadata_registry_t>(std::move(metadata_filename)))
+{}
 
 void
 cache_manager::post_process_bulk()
@@ -574,10 +590,6 @@ cache_manager::post_process_bulk()
 
     auto processor_configs =
         processing_utils::create_processor_configs(cache_files, root_pid);
-
-    processor_configs.push_back(std::make_shared<data::processor_config_t>(
-        getpid(), root_pid, m_metadata,
-        std::make_shared<agent_manager>(get_agent_manager_instance().get_agents())));
 
     processing_utils::dispatch_processing(processor_configs, enabled_formats);
 
@@ -631,6 +643,7 @@ void
 cache_manager::shutdown()
 {
     m_storage.shutdown();
+    m_metadata->shutdown();
 }
 
 }  // namespace trace_cache

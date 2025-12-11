@@ -122,17 +122,13 @@ auto _timemory_settings = tim::settings::shared_instance();
 void
 set_metadata_process_start_timestamp(int64_t _ts)
 {
-    auto process_info  = trace_cache::get_metadata_registry().get_process_info();
-    process_info.start = _ts;
-    trace_cache::get_metadata_registry().set_process(process_info);
+    trace_cache::get_metadata_registry().set_process_start_time({ _ts });
 }
 
 void
 set_metadata_process_end_timestamp(int64_t _ts)
 {
-    auto process_info = trace_cache::get_metadata_registry().get_process_info();
-    process_info.end  = _ts;
-    trace_cache::get_metadata_registry().set_process(process_info);
+    trace_cache::get_metadata_registry().set_process_end_time({ _ts });
 }
 
 bool
@@ -549,6 +545,23 @@ rocprofsys_init_tooling_hidden(void)
 #if !(ROCPROFSYS_USE_ROCM > 0)
         rocprofsys_preinit_cpu_agents();
 #endif
+        // hack: be sure that the agents are queried
+        gpu::device_count();
+
+        {
+            ROCPROFSYS_SCOPED_SAMPLING_ON_CHILD_THREADS(false);
+            trace_cache::get_buffer_storage().start(getpid());
+            trace_cache::get_metadata_registry().start(getpid());
+        }
+
+        {
+            const auto& _agents = get_agent_manager_instance().get_agents();
+            for(const auto& _agent : _agents)
+            {
+                trace_cache::get_metadata_registry().add_agent_info({ _agent });
+            }
+        }
+
         rocprofsys_preinit_cache();
 
         if(get_use_process_sampling())
@@ -577,11 +590,6 @@ rocprofsys_init_tooling_hidden(void)
         get_main_bundle()->start();
         ROCPROFSYS_DEBUG_F("State: %s -> State::Active\n",
                            std::to_string(get_state()).c_str());
-
-        {
-            ROCPROFSYS_SCOPED_SAMPLING_ON_CHILD_THREADS(false);
-            trace_cache::get_buffer_storage().start(getpid());
-        }
 
         set_state(State::Active);  // set to active as very last operation
     } };
@@ -798,12 +806,8 @@ rocprofsys_finalize_hidden(void)
             rocprofiler_sdk::shutdown();
         }
 #endif
-        auto&      _manager = rocprofsys::trace_cache::cache_manager::get_instance();
-        const auto _agents  = get_agent_manager_instance().get_agents();
+        auto& _manager = rocprofsys::trace_cache::cache_manager::get_instance();
         _manager.shutdown();
-        const auto metadata_filepath =
-            trace_cache::utility::get_metadata_filepath(get_root_process_id(), getpid());
-        _manager.get_metadata_registry().save_to_file(metadata_filepath, _agents);
 
         std::quick_exit(EXIT_SUCCESS);
         return;

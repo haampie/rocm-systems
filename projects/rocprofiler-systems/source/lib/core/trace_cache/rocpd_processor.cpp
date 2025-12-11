@@ -54,18 +54,11 @@ namespace trace_cache
 namespace
 {
 
-#if ROCPROFSYS_USE_ROCM > 0
 auto
-get_handle_from_code_object(
-    const rocprofiler_callback_tracing_code_object_load_data_t& code_object)
+get_handle_from_code_object(const info::code_object& code_object)
 {
-#    if(ROCPROFILER_VERSION >= 600)
-    return code_object.agent_id.handle;
-#    else
-    return code_object.rocp_agent.handle;
-#    endif
+    return code_object.agent_id_handle;
 }
-#endif
 }  // namespace
 
 void
@@ -589,13 +582,14 @@ rocpd_processor_t::handle([[maybe_unused]] const cpu_freq_sample& _cpu_freq_samp
     auto core_freq_samples = deserialize_freqs(_cpu_freq_sample.freqs);
     for(const auto& core : core_freq_samples)
     {
-        insert_event_and_sample(get_track_name(core.id).c_str(), core.value);
+        insert_event_and_sample(get_track_name(core.id).c_str(),
+                                static_cast<double>(core.value));
     }
 #endif
 }
 
-rocpd_processor_t::rocpd_processor_t(const std::shared_ptr<metadata_registry>& md,
-                                     const std::shared_ptr<agent_manager>&     agent_mngr,
+rocpd_processor_t::rocpd_processor_t(const std::shared_ptr<metadata_storage_t>& md,
+                                     const std::shared_ptr<agent_manager>& agent_mngr,
                                      int pid, int ppid)
 : processor_t<rocpd_processor_t>()
 , m_metadata(md)
@@ -632,10 +626,13 @@ rocpd_processor_t::post_process_metadata()
         n_info.node_name.c_str(), n_info.release.c_str(), n_info.version.c_str(),
         n_info.machine.c_str(), n_info.domain_name.c_str());
 
-    auto process_info = m_metadata->get_process_info();
-    m_data_processor->insert_process_info(n_info.id, process_info.ppid, process_info.pid,
-                                          0, 0, process_info.start, process_info.end,
-                                          process_info.command.c_str(), "{}");
+    auto process_info       = m_metadata->get_process_info();
+    auto process_start_time = m_metadata->get_process_start_time();
+    auto process_end_time   = m_metadata->get_process_end_time();
+
+    m_data_processor->insert_process_info(
+        n_info.id, process_info.ppid, process_info.pid, 0, 0, process_start_time.start,
+        process_end_time.end, process_info.command.c_str(), "{}");
 
     const auto& agents  = m_agent_manager->get_agents();
     int         counter = 0;
@@ -689,10 +686,10 @@ rocpd_processor_t::post_process_metadata()
             case ROCPROFILER_CODE_OBJECT_STORAGE_TYPE_MEMORY: strg_type = "MEMORY"; break;
             default: break;
         }
-        m_data_processor->insert_code_object(code_object.code_object_id, n_info.id,
-                                             process_info.pid, dev_id, code_object.uri,
-                                             code_object.load_base, code_object.load_size,
-                                             code_object.load_delta, strg_type);
+        m_data_processor->insert_code_object(
+            code_object.code_object_id, n_info.id, process_info.pid, dev_id,
+            code_object.uri.c_str(), code_object.load_base, code_object.load_size,
+            code_object.load_delta, strg_type);
     }
 
     auto _kernel_symbols_list = m_metadata->get_kernel_symbol_list();
@@ -701,30 +698,31 @@ rocpd_processor_t::post_process_metadata()
         auto kernel_name = tim::demangle(kernel_symbol.kernel_name);
         m_data_processor->insert_kernel_symbol(
             kernel_symbol.kernel_id, n_info.id, process_info.pid,
-            kernel_symbol.code_object_id, kernel_symbol.kernel_name, kernel_name.c_str(),
-            kernel_symbol.kernel_object, kernel_symbol.kernarg_segment_size,
-            kernel_symbol.kernarg_segment_alignment, kernel_symbol.group_segment_size,
-            kernel_symbol.private_segment_size, kernel_symbol.sgpr_count,
-            kernel_symbol.arch_vgpr_count, kernel_symbol.accum_vgpr_count);
+            kernel_symbol.code_object_id, kernel_symbol.kernel_name.c_str(),
+            kernel_name.c_str(), kernel_symbol.kernel_object,
+            kernel_symbol.kernarg_segment_size, kernel_symbol.kernarg_segment_alignment,
+            kernel_symbol.group_segment_size, kernel_symbol.private_segment_size,
+            kernel_symbol.sgpr_count, kernel_symbol.arch_vgpr_count,
+            kernel_symbol.accum_vgpr_count);
 
         m_data_processor->insert_string(kernel_name.c_str());
     }
 
     auto _queue_list = m_metadata->get_queue_list();
-    for(const auto& queue_handle : _queue_list)
+    for(const auto& queue : _queue_list)
     {
         std::stringstream ss;
-        ss << "Queue " << queue_handle;
-        m_data_processor->insert_queue_info(queue_handle, n_info.id, process_info.pid,
+        ss << "Queue " << queue.handle;
+        m_data_processor->insert_queue_info(queue.handle, n_info.id, process_info.pid,
                                             ss.str().c_str());
     }
 
     auto _stream_list = m_metadata->get_stream_list();
-    for(const auto& stream_handle : _stream_list)
+    for(const auto& stream : _stream_list)
     {
         std::stringstream ss;
-        ss << "Stream " << stream_handle;
-        m_data_processor->insert_stream_info(stream_handle, n_info.id, process_info.pid,
+        ss << "Stream " << stream.handle;
+        m_data_processor->insert_stream_info(stream.handle, n_info.id, process_info.pid,
                                              ss.str().c_str());
     }
 

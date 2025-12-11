@@ -48,7 +48,7 @@ struct pmc_track_info
 class perfetto_processor_t : public processor_t<perfetto_processor_t>
 {
 public:
-    perfetto_processor_t(const std::shared_ptr<metadata_registry>& metadata,
+    perfetto_processor_t(const std::shared_ptr<metadata_storage_t>& metadata,
                          const std::shared_ptr<agent_manager>& agent_mngr, int pid,
                          int ppid);
 
@@ -73,7 +73,7 @@ private:
     void       flush(bool& perfetto_output_error);
     char_vec_t get_session_data();
 
-    metadata_registry&                          m_metadata;
+    std::shared_ptr<metadata_storage_t>         m_metadata;
     uint64_t                                    m_process_id;
     uint64_t                                    m_parrent_pid;
     agent_manager&                              m_agent_manager;

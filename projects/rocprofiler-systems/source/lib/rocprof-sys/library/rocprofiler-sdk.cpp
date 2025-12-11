@@ -534,8 +534,7 @@ cache_region(const rocprofiler_callback_tracing_record_t* record,
              const std::string& args_str, const std::string& category)
 
 {
-    auto callback_tracing_info =
-        trace_cache::get_metadata_registry().get_callback_tracing_info();
+    auto callback_tracing_info = rocprofiler::sdk::get_callback_tracing_names();
     auto _name = std::string{ callback_tracing_info.at(record->kind, record->operation) };
 
     trace_cache::get_buffer_storage().store(trace_cache::region_sample{

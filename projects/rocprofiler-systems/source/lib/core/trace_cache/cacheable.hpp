@@ -70,7 +70,7 @@ const auto get_buffered_storage_filename = [](const int& ppid, const int& pid) {
 
 const auto get_metadata_filepath = [](const int& ppid, const int& pid) {
     return std::string{ tmp_directory + "metadata_" + std::to_string(ppid) + "_" +
-                        std::to_string(pid) + ".json" };
+                        std::to_string(pid) + ".bin" };
 };
 
 template <typename Type>

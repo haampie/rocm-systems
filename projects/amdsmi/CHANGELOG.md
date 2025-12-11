@@ -4,6 +4,38 @@ Full documentation for amd_smi_lib is available at [https://rocm.docs.amd.com/pr
 
 ***All information listed below is for reference and subject to change.***
 
+## amd_smi_lib for ROCm 7.3.0
+
+### Added
+
+- N/A
+
+### Changed
+
+- **Aligned `hip_uuid` in `amdsmi_get_gpu_enumeration_info()` with rocminfo**.  
+  - The `hip_uuid` field now sources from KFD ensuring consistency with rocminfo and KFD's UUID generation.
+  - The `asic_serial` field now returns N/A on partitioned devices.
+
+### Removed
+
+- N/A
+
+### Optimized
+
+- N/A
+
+### Resolved Issues
+
+- N/A
+
+### Upcoming Changes
+
+- N/A
+
+### Known Issues
+
+- N/A
+
 ## amd_smi_lib for ROCm 7.2.0
 
 ### Added

@@ -21,21 +21,25 @@
 // SOFTWARE.
 
 #include "metadata_registry.hpp"
+#include "common/synchronized.hpp"
 #include "core/debug.hpp"
 #include <cstdint>
+#include <unordered_map>
 
 namespace rocprofsys
 {
 namespace trace_cache
 {
+
 template <typename T>
 bool
-metadata_registry_t::try_store_unique(const T& item)
+metadata_registry_t::try_store_unique(
+    common::synchronized<std::unordered_set<size_t>>& hash_list, const T& item)
 {
     auto _hash_value = item.hash();
     bool _inserted   = false;
 
-    m_unique_objects.wlock([&_hash_value, &_inserted](std::unordered_set<size_t>& _data) {
+    hash_list.wlock([&_hash_value, &_inserted](std::unordered_set<size_t>& _data) {
         if(_data.find(_hash_value) != _data.end())
         {
             _inserted = false;
@@ -60,38 +64,42 @@ metadata_registry_t::metadata_registry_t(std::string metadata_filename)
 void
 metadata_registry_t::set_process(const info::process& process)
 {
-    try_store_unique(process);
+    m_process_info.wlock([&](size_t& _process_info) { _process_info = process.hash(); });
 }
 
 void
 metadata_registry_t::set_process_start_time(
     const info::process_start_time& process_start_time)
 {
-    try_store_unique(process_start_time);
+    m_process_start_time_info.wlock([&](size_t& _process_start_time_info) {
+        _process_start_time_info = process_start_time.hash();
+    });
 }
 
 void
 metadata_registry_t::set_process_end_time(const info::process_end_time& process_end_time)
 {
-    try_store_unique(process_end_time);
+    m_process_end_time_info.wlock([&](size_t& _process_end_time_info) {
+        _process_end_time_info = process_end_time.hash();
+    });
 }
 
 void
 metadata_registry_t::add_pmc_info(const info::pmc& pmc_info)
 {
-    try_store_unique(pmc_info);
+    try_store_unique(m_pmc_info_hash_list, pmc_info);
 }
 
 void
 metadata_registry_t::add_thread_info(const info::thread& thread_info)
 {
-    try_store_unique(thread_info);
+    try_store_unique(m_thread_info_hash_list, thread_info);
 }
 
 void
 metadata_registry_t::add_track(const info::track& track_info)
 {
-    try_store_unique(track_info);
+    try_store_unique(m_track_info_hash_list, track_info);
 }
 
 void
@@ -99,7 +107,7 @@ metadata_registry_t::add_queue(const uint64_t& queue_handle)
 {
     info::queue queue_info;
     queue_info.handle = queue_handle;
-    try_store_unique(queue_info);
+    try_store_unique(m_queue_info_hash_list, queue_info);
 }
 
 void
@@ -107,7 +115,7 @@ metadata_registry_t::add_stream(const uint64_t& stream_handle)
 {
     info::stream stream_info;
     stream_info.handle = stream_handle;
-    try_store_unique(stream_info);
+    try_store_unique(m_stream_info_hash_list, stream_info);
 }
 
 void
@@ -115,13 +123,13 @@ metadata_registry_t::add_string(const std::string_view& string_value)
 {
     info::string_entry string_info;
     string_info.value = string_value;
-    try_store_unique(string_info);
+    try_store_unique(m_string_info_hash_list, string_info);
 }
 
 void
 metadata_registry_t::add_agent_info(const info::agent_t& agent_info)
 {
-    try_store_unique(agent_info);
+    try_store_unique(m_agent_info_hash_list, agent_info);
 }
 
 #if ROCPROFSYS_USE_ROCM > 0
@@ -142,7 +150,7 @@ metadata_registry_t::add_code_object(
 #    else
     co_info.agent_id_handle = code_object.rocp_agent.handle;
 #    endif
-    try_store_unique(co_info);
+    try_store_unique(m_code_object_info_hash_list, co_info);
 }
 
 void
@@ -159,7 +167,7 @@ metadata_registry_t::add_kernel_symbol(
     ks_info.kernarg_segment_size      = kernel_symbol.kernarg_segment_size;
     ks_info.kernarg_segment_alignment = kernel_symbol.kernarg_segment_alignment;
     ks_info.group_segment_size        = kernel_symbol.group_segment_size;
-    try_store_unique(ks_info);
+    try_store_unique(m_kernel_symbol_info_hash_list, ks_info);
 }
 
 // As the underlying implementation of callback_name_info_t resizes the category

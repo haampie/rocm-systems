@@ -807,13 +807,26 @@ struct metadata_registry_t
 
 private:
     template <typename T>
-    bool try_store_unique(const T& item);
+    bool try_store_unique(common::synchronized<std::unordered_set<size_t>>& hash_list,
+                          const T&                                          item);
 
     buffer_storage<flush_worker_factory_t, info::metadata_identifier_t,
                    metadata_buffer_size, metadata_flush_threshold>
         m_metadata_buffer;
 
-    common::synchronized<std::unordered_set<size_t>> m_unique_objects;
+    common::synchronized<size_t> m_process_info{};
+    common::synchronized<size_t> m_process_start_time_info{};
+    common::synchronized<size_t> m_process_end_time_info{};
+
+    common::synchronized<std::unordered_set<size_t>> m_pmc_info_hash_list{};
+    common::synchronized<std::unordered_set<size_t>> m_thread_info_hash_list{};
+    common::synchronized<std::unordered_set<size_t>> m_track_info_hash_list{};
+    common::synchronized<std::unordered_set<size_t>> m_queue_info_hash_list{};
+    common::synchronized<std::unordered_set<size_t>> m_stream_info_hash_list{};
+    common::synchronized<std::unordered_set<size_t>> m_string_info_hash_list{};
+    common::synchronized<std::unordered_set<size_t>> m_code_object_info_hash_list{};
+    common::synchronized<std::unordered_set<size_t>> m_kernel_symbol_info_hash_list{};
+    common::synchronized<std::unordered_set<size_t>> m_agent_info_hash_list{};
 };
 
 struct metadata_storage_t

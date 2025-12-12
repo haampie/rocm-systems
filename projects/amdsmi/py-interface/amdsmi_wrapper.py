@@ -304,6 +304,7 @@ amdsmi_status_t__enumvalues = {
     6: 'AMDSMI_STATUS_DRM_ERROR',
     7: 'AMDSMI_STATUS_API_FAILED',
     8: 'AMDSMI_STATUS_TIMEOUT',
+    9: 'AMDSMI_STATUS_RETRY',
     10: 'AMDSMI_STATUS_NO_PERM',
     11: 'AMDSMI_STATUS_INTERRUPT',
     12: 'AMDSMI_STATUS_IO',
@@ -2283,6 +2284,7 @@ struct_amdsmi_npm_info_t._fields_ = [
 ]
 
 amdsmi_npm_info_t = struct_amdsmi_npm_info_t
+
 # values for enumeration 'amdsmi_ptl_data_format_t'
 amdsmi_ptl_data_format_t__enumvalues = {
     0: 'AMDSMI_PTL_DATA_FORMAT_I8',
@@ -3336,7 +3338,7 @@ __all__ = \
     'AMDSMI_STATUS_NO_HSMP_SUP', 'AMDSMI_STATUS_NO_MSR_DRV',
     'AMDSMI_STATUS_NO_PERM', 'AMDSMI_STATUS_NO_SLOT',
     'AMDSMI_STATUS_OUT_OF_RESOURCES',
-    'AMDSMI_STATUS_REFCOUNT_OVERFLOW',
+    'AMDSMI_STATUS_REFCOUNT_OVERFLOW', 'AMDSMI_STATUS_RETRY',
     'AMDSMI_STATUS_SETTING_UNAVAILABLE', 'AMDSMI_STATUS_SUCCESS',
     'AMDSMI_STATUS_TIMEOUT', 'AMDSMI_STATUS_UNEXPECTED_DATA',
     'AMDSMI_STATUS_UNEXPECTED_SIZE', 'AMDSMI_STATUS_UNKNOWN_ERROR',

@@ -809,8 +809,11 @@ private:
     template <typename T>
     bool try_store_unique(const T& item);
 
-    buffer_storage<flush_worker_factory_t, info::metadata_identifier_t> m_metadata_buffer;
-    common::synchronized<std::unordered_set<size_t>>                    m_unique_objects;
+    buffer_storage<flush_worker_factory_t, info::metadata_identifier_t,
+                   metadata_buffer_size, metadata_flush_threshold>
+        m_metadata_buffer;
+
+    common::synchronized<std::unordered_set<size_t>> m_unique_objects;
 };
 
 struct metadata_storage_t

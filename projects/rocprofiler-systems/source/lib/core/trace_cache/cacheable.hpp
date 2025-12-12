@@ -46,17 +46,23 @@ struct cacheable_t
     cacheable_t() = default;
 };
 
-constexpr size_t MByte                    = 1024 * 1024;
-constexpr size_t buffer_size              = 100 * MByte;
-constexpr size_t flush_threshold          = 80 * MByte;
-constexpr auto   CACHE_FILE_FLUSH_TIMEOUT = 10ms;
+constexpr size_t MByte           = 1024 * 1024;
+constexpr size_t buffer_size     = 100 * MByte;
+constexpr size_t flush_threshold = 80 * MByte;
+
+constexpr size_t metadata_buffer_size     = 5 * MByte;
+constexpr size_t metadata_flush_threshold = 3 * MByte;
+
+constexpr auto CACHE_FILE_FLUSH_TIMEOUT = 10ms;
 
 constexpr auto ABSOLUTE   = "ABS";
 constexpr auto PERCENTAGE = "%";
 
 template <typename TypeIdentifierEnum>
 constexpr size_t header_size = sizeof(TypeIdentifierEnum) + sizeof(size_t);
-using buffer_array_t         = std::array<uint8_t, buffer_size>;
+
+template <size_t BufferSize>
+using buffer_array_t = std::array<uint8_t, BufferSize>;
 
 const auto tmp_directory = std::string{ "/tmp/" };
 

@@ -100,7 +100,8 @@ struct flush_worker_factory_t
     }
 };
 
-template <typename WorkerFactory, typename TypeIdentifierEnum>
+template <typename WorkerFactory, typename TypeIdentifierEnum,
+          size_t BufferSize = buffer_size, size_t FlushThreshold = flush_threshold>
 class buffer_storage
 {
     static_assert(type_traits::is_enum_class_v<TypeIdentifierEnum>,
@@ -194,8 +195,8 @@ private:
             }
 
             auto used_space =
-                m_head > m_tail ? (m_head - m_tail) : (buffer_size - m_tail + m_head);
-            if(!force && used_space < flush_threshold)
+                m_head > m_tail ? (m_head - m_tail) : (BufferSize - m_tail + m_head);
+            if(!force && used_space < FlushThreshold)
             {
                 return;
             }
@@ -210,7 +211,7 @@ private:
         else
         {
             ofs.write(reinterpret_cast<const char*>(m_buffer->data() + _tail),
-                      buffer_size - _tail);
+                      BufferSize - _tail);
             ofs.write(reinterpret_cast<const char*>(m_buffer->data()), _head);
         }
         if(ofs.fail())
@@ -224,11 +225,11 @@ private:
     void fragment_memory()
     {
         auto* _data = m_buffer->data();
-        memset(_data + m_head, std::numeric_limits<uint8_t>::max(), buffer_size - m_head);
+        memset(_data + m_head, std::numeric_limits<uint8_t>::max(), BufferSize - m_head);
         *reinterpret_cast<TypeIdentifierEnum*>(_data + m_head) =
             TypeIdentifierEnum::fragmented_space;
 
-        size_t remaining_bytes = buffer_size - m_head - header_size<TypeIdentifierEnum>;
+        size_t remaining_bytes = BufferSize - m_head - header_size<TypeIdentifierEnum>;
         *reinterpret_cast<size_t*>(_data + m_head + sizeof(TypeIdentifierEnum)) =
             remaining_bytes;
         m_head = 0;
@@ -241,7 +242,7 @@ private:
             std::lock_guard scope{ m_mutex };
 
             if(__builtin_expect((m_head + number_of_bytes +
-                                 header_size<TypeIdentifierEnum>) > buffer_size,
+                                 header_size<TypeIdentifierEnum>) > BufferSize,
                                 0))
             {
                 fragment_memory();
@@ -260,10 +261,13 @@ private:
 
     std::shared_ptr<typename WorkerFactory::worker_t> m_worker;
 
-    std::mutex                      m_mutex;
-    size_t                          m_head{ 0 };
-    size_t                          m_tail{ 0 };
-    std::unique_ptr<buffer_array_t> m_buffer{ std::make_unique<buffer_array_t>() };
+    std::mutex m_mutex;
+    size_t     m_head{ 0 };
+    size_t     m_tail{ 0 };
+
+    std::unique_ptr<buffer_array_t<BufferSize>> m_buffer{
+        std::make_unique<buffer_array_t<BufferSize>>()
+    };
 };
 
 }  // namespace trace_cache

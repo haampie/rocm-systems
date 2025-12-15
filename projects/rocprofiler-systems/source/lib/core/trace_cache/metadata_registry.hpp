@@ -810,7 +810,7 @@ private:
     bool try_store_unique(common::synchronized<std::unordered_set<size_t>>& hash_list,
                           const T&                                          item);
 
-    buffer_storage<flush_worker_factory_t, info::metadata_identifier_t,
+    buffer_storage<mmap_flush_worker_factory_t<>, info::metadata_identifier_t,
                    metadata_buffer_size, metadata_flush_threshold>
         m_metadata_buffer;
 

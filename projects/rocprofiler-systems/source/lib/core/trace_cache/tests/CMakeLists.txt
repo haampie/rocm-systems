@@ -26,6 +26,7 @@ set(trace_cache_tests_sources
     test_buffer_storage.cpp
     test_storage_parser.cpp
     test_flush_worker.cpp
+    test_mmap_flush_worker.cpp
     test_cache_integration.cpp
     test_sample_type.cpp
 )

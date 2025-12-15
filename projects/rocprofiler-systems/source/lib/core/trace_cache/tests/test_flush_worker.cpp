@@ -22,11 +22,19 @@
 
 #include "core/trace_cache/buffer_storage.hpp"
 
+#include <gtest/gtest.h>
+
 #include <atomic>
 #include <chrono>
-#include <gtest/gtest.h>
+#include <cstring>
+#include <fcntl.h>
+#include <fstream>
+#include <signal.h>
 #include <stdexcept>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <thread>
+#include <unistd.h>
 
 class flush_worker_test : public ::testing::Test
 {
@@ -48,6 +56,26 @@ protected:
 };
 
 std::atomic<int> flush_worker_test::test_counter{ 0 };
+
+namespace
+{
+size_t
+get_file_size(const std::string& path)
+{
+    struct stat st;
+    if(stat(path.c_str(), &st) == 0) return static_cast<size_t>(st.st_size);
+    return 0;
+}
+
+std::vector<uint8_t>
+read_file_contents(const std::string& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    if(!file) return {};
+    return std::vector<uint8_t>(std::istreambuf_iterator<char>(file),
+                                std::istreambuf_iterator<char>());
+}
+}  // namespace
 
 TEST_F(flush_worker_test, start_worker_in_correct_state)
 {
@@ -202,5 +230,75 @@ TEST_F(flush_worker_test, different_pid_start_stop)
         EXPECT_TRUE(worker_sync->exit_finished);
         EXPECT_FALSE(worker_sync->is_running);
         EXPECT_TRUE(worker_called);
+    }
+}
+
+TEST_F(flush_worker_test, data_lost_on_sigkill)
+{
+    const std::string test_marker     = "FLUSH_WORKER_SIGKILL_TEST_DATA_MARKER_12345";
+    const size_t      expected_writes = 10;
+    const std::string sigkill_test_file =
+        "/tmp/flush_worker_sigkill_test_" + std::to_string(getpid()) + ".bin";
+
+    std::remove(sigkill_test_file.c_str());
+
+    pid_t child_pid = fork();
+    if(child_pid == 0)
+    {
+        auto worker_sync_child =
+            std::make_shared<rocprofsys::trace_cache::worker_synchronization_t>();
+
+        size_t write_count     = 0;
+        auto   worker_function = [&](rocprofsys::trace_cache::ofs_t& ofs, bool) {
+            if(write_count < expected_writes)
+            {
+                ofs.write(test_marker.data(),
+                            static_cast<std::streamsize>(test_marker.size()));
+                write_count++;
+            }
+        };
+
+        rocprofsys::trace_cache::flush_worker_t worker(worker_function, worker_sync_child,
+                                                       sigkill_test_file);
+
+        worker.start(getpid());
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        kill(getpid(), SIGKILL);
+
+        _exit(1);
+    }
+    else
+    {
+        int status;
+        waitpid(child_pid, &status, 0);
+
+        EXPECT_TRUE(WIFSIGNALED(status));
+        EXPECT_EQ(WTERMSIG(status), SIGKILL);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        auto   contents  = read_file_contents(sigkill_test_file);
+        size_t file_size = get_file_size(sigkill_test_file);
+
+        size_t markers_found = 0;
+        if(!contents.empty())
+        {
+            std::string content_str(contents.begin(), contents.end());
+            size_t      pos = 0;
+            while((pos = content_str.find(test_marker, pos)) != std::string::npos)
+            {
+                markers_found++;
+                pos += test_marker.size();
+            }
+        }
+
+        std::remove(sigkill_test_file.c_str());
+
+        EXPECT_LT(markers_found, expected_writes)
+            << "Expected data loss on SIGKILL for ofstream-based flush_worker. "
+            << "Found " << markers_found << " markers, expected less than "
+            << expected_writes << ". File size: " << file_size;
     }
 }

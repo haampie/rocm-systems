@@ -41,7 +41,7 @@ using storage_parser_t =
                    pmc_event_with_sample, amd_smi_sample, cpu_freq_sample,
                    backtrace_region_sample>;
 
-using buffer_storage_t = buffer_storage<flush_worker_factory_t, type_identifier_t>;
+using buffer_storage_t = buffer_storage<mmap_flush_worker_factory_t<>, type_identifier_t>;
 
 class cache_manager
 {

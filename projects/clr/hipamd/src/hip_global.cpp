@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include "hip_internal.hpp"
 #include "hip_code_object.hpp"
 #include "platform/program.hpp"
+#include "os/os.hpp"
 #include <hip/hip_version.h>
 
 const char* amd_dbgapi_get_build_name(void) { return HIP_VERSION_BUILD_NAME; }
@@ -274,13 +275,29 @@ hipError_t Var::getStatDeviceVar(DeviceVar** dvar, int deviceId) {
   return hipSuccess;
 }
 // this method is added for allocation of managed var
-hipError_t Var::allocateManagedVarPtr() {
+hipError_t Var::allocateManagedVarPtr(bool hmmSupported) {
   void** pointer = static_cast<void**>(managedVarPtr_);
   // check if it is deffered allocation
   if (!allocFlag_) {
+    void *hostPtr = pointer;
+
     // Allocate managed memory for this var
-    const bool use_host_ptr = true;
-    IHIP_RETURN_ONFAIL(ihipMallocManaged(pointer, size_, align_, use_host_ptr));
+    if (hmmSupported) {
+      const bool use_host_ptr = true;
+      IHIP_RETURN_ONFAIL(ihipMallocManaged(pointer, size_, align_, use_host_ptr));
+    } else {
+      // using use_host_ptr = true here caused problems on some ASICs when HMM is disabled;
+      // instead we don't reuse the initial host pointer, we allocate a new buffer and memcpy() whatever
+      // changes the user made
+      IHIP_RETURN_ONFAIL(ihipMallocManaged(pointer, size_, align_, false));
+      IHIP_RETURN_ONFAIL(ihipMemcpy(pointer, hostPtr, size_, hipMemcpyHostToDevice,
+                                    *hip::getNullStream(), true, false));
+
+      if (!amd::Os::releaseMemory(hostPtr, size_)) {
+        ClPrint(amd::LOG_ERROR, amd::LOG_MEM, "munmap failed on address %p", hostPtr);
+      }
+    }
+
     allocFlag_ = true;
   }
   if (dVar_.empty()) {

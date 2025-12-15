@@ -119,7 +119,7 @@ class Var {
 
   hipError_t getDeviceVarPtr(DeviceVar** dvar, int deviceId);
 
-  hipError_t allocateManagedVarPtr();
+  hipError_t allocateManagedVarPtr(bool hmmSupported);
 
   void resize_dVar(size_t size) { dVar_.resize(size); }
   // bool isEmpty_dVar() const { return dVar_.empty(); }

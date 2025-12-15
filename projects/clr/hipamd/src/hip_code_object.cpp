@@ -541,13 +541,14 @@ hipError_t StatCO::initStatManagedVarDevicePtr(int deviceId) {
           err = digestFatBinary(module_to_hostModule_[module], *module);
           assert(err == hipSuccess);
         }
-        hip::Stream* stream = g_devices.at(deviceId)->NullStream();
+        hip::Device* device = g_devices.at(deviceId);
+        hip::Stream* stream = device->NullStream();
         if (stream == nullptr) {
           ClPrint(amd::LOG_ERROR, amd::LOG_API, "Host Queue is NULL");
           return hipErrorInvalidResourceHandle;
         }
         // Allocate managed var for deferred loading
-        IHIP_RETURN_ONFAIL(var->allocateManagedVarPtr());
+        IHIP_RETURN_ONFAIL(var->allocateManagedVarPtr(device->devices()[0]->info().hmmSupported_));
         // Copy from managed var host to device ptr
         DeviceVar* dvar = nullptr;
         IHIP_RETURN_ONFAIL(var->getStatDeviceVar(&dvar, deviceId));

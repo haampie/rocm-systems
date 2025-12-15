@@ -21,10 +21,6 @@
 // SOFTWARE.
 
 #include "metadata_registry.hpp"
-#include "common/synchronized.hpp"
-#include "core/debug.hpp"
-#include <cstdint>
-#include <unordered_map>
 
 namespace rocprofsys
 {
@@ -132,165 +128,16 @@ metadata_registry_t::add_agent_info(const info::agent_t& agent_info)
     try_store_unique(m_agent_info_hash_list, agent_info);
 }
 
-#if ROCPROFSYS_USE_ROCM > 0
-
 void
-metadata_registry_t::add_code_object(
-    const rocprofiler_callback_tracing_code_object_load_data_t& code_object)
+metadata_registry_t::add_code_object(const info::code_object& code_object)
 {
-    info::code_object co_info;
-    co_info.code_object_id = code_object.code_object_id;
-    co_info.uri            = code_object.uri ? std::string(code_object.uri) : "";
-    co_info.load_base      = code_object.load_base;
-    co_info.load_size      = code_object.load_size;
-    co_info.load_delta     = code_object.load_delta;
-    co_info.storage_type   = static_cast<int32_t>(code_object.storage_type);
-#    if(ROCPROFILER_VERSION >= 600)
-    co_info.agent_id_handle = code_object.agent_id.handle;
-#    else
-    co_info.agent_id_handle = code_object.rocp_agent.handle;
-#    endif
-    try_store_unique(m_code_object_info_hash_list, co_info);
+    try_store_unique(m_code_object_info_hash_list, code_object);
 }
 
 void
-metadata_registry_t::add_kernel_symbol(
-    const rocprofiler_callback_tracing_code_object_kernel_symbol_register_data_t&
-        kernel_symbol)
+metadata_registry_t::add_kernel_symbol(const info::kernel_symbol& kernel_symbol)
 {
-    info::kernel_symbol ks_info;
-    ks_info.kernel_id      = kernel_symbol.kernel_id;
-    ks_info.code_object_id = kernel_symbol.code_object_id;
-    ks_info.kernel_name =
-        kernel_symbol.kernel_name ? std::string(kernel_symbol.kernel_name) : "";
-    ks_info.kernel_object             = kernel_symbol.kernel_object;
-    ks_info.kernarg_segment_size      = kernel_symbol.kernarg_segment_size;
-    ks_info.kernarg_segment_alignment = kernel_symbol.kernarg_segment_alignment;
-    ks_info.group_segment_size        = kernel_symbol.group_segment_size;
-    try_store_unique(m_kernel_symbol_info_hash_list, ks_info);
-}
-
-// As the underlying implementation of callback_name_info_t resizes the category
-// storage during emplace, this special method is required
-void
-metadata_storage_t::overwrite_callback_names(
-    std::initializer_list<
-        std::pair<rocprofiler_callback_tracing_kind_t, callback_rename_map_t>>
-        rename_table)
-{
-    if(rename_table.size() == 0) return;
-
-    using callback_kind_t   = rocprofiler_callback_tracing_kind_t;
-    using operation_names_t = std::vector<std::string_view>;
-
-    auto category_names = std::vector<std::string_view>{};
-    auto modified_ops   = std::map<callback_kind_t, operation_names_t>{};
-
-    auto extract_operations = [&](callback_kind_t cat) -> operation_names_t {
-        auto        items           = m_callback_tracing_info.items();
-        const auto* target_category = items[static_cast<size_t>(cat)];
-
-        auto              operations_data = target_category->items();
-        operation_names_t operation_names;
-        operation_names.reserve(operations_data.size());
-
-        for(const auto& [op_idx, op_name] : operations_data)
-            operation_names.push_back(*op_name);
-
-        return operation_names;
-    };
-
-    // Store category names
-    category_names.resize(ROCPROFILER_CALLBACK_TRACING_LAST);
-    for(callback_kind_t i = ROCPROFILER_CALLBACK_TRACING_NONE;
-        i < ROCPROFILER_CALLBACK_TRACING_LAST;
-        i = static_cast<callback_kind_t>(static_cast<int>(i) + 1))
-    {
-        category_names[i] = m_callback_tracing_info.at(i);
-    }
-
-    // Process list
-    for(const auto& category_info : rename_table)
-    {
-        auto callback_kind = category_info.first;
-        // Store operations of all following categories
-        //  as they will be deleted
-        for(callback_kind_t i =
-                static_cast<callback_kind_t>(static_cast<int>(callback_kind) + 1);
-            i < ROCPROFILER_CALLBACK_TRACING_LAST;
-            i = static_cast<callback_kind_t>(static_cast<int>(i) + 1))
-        {
-            if(modified_ops.find(i) != modified_ops.end()) break;
-            modified_ops[i] = extract_operations(i);
-        }
-
-        ROCPROFSYS_CI_THROW(modified_ops.find(callback_kind) != modified_ops.end(),
-                            "Overwriting a previously overwritten entry is forbidden");
-
-        ROCPROFSYS_CI_THROW(!modified_ops.empty() &&
-                                callback_kind >= modified_ops.begin()->first,
-                            "Category must have a larger enum value than all previously "
-                            "modified_ops categories");
-
-        // Overwrite desired category
-        auto operation_names = extract_operations(callback_kind);
-        for(const auto& [index, new_value] : category_info.second)
-        {
-            ROCPROFSYS_CI_THROW(index < 0 ||
-                                    static_cast<size_t>(index) >= operation_names.size(),
-                                "Index is invalid");
-            operation_names[index] = new_value;
-        }
-        modified_ops[callback_kind] = std::move(operation_names);
-    }
-    if(modified_ops.empty()) return;
-
-    // Emplace the changed category operations
-    for(callback_kind_t i = modified_ops.begin()->first;
-        i < ROCPROFILER_CALLBACK_TRACING_LAST;
-        i = static_cast<callback_kind_t>(static_cast<int>(i) + 1))
-    {
-        auto renaming_entry = modified_ops.find(i);
-
-        ROCPROFSYS_CI_THROW(renaming_entry == modified_ops.end(),
-                            "A category that needs to be emplaced is missing");
-
-        const auto& operations_vec = renaming_entry->second;
-        m_callback_tracing_info.emplace(i, category_names.at(i).data());
-        for(size_t op_idx = 0; op_idx < operations_vec.size(); ++op_idx)
-        {
-            m_callback_tracing_info.emplace(
-                i, static_cast<rocprofiler_tracing_operation_t>(op_idx),
-                operations_vec[op_idx].data());
-        }
-    }
-}
-
-rocprofiler::sdk::buffer_name_info_t<const char*>
-metadata_storage_t::get_buffer_name_info() const
-{
-    return m_buffered_tracing_info;
-}
-
-rocprofiler::sdk::callback_name_info_t<const char*>
-metadata_storage_t::get_callback_tracing_info() const
-{
-    return m_callback_tracing_info;
-}
-
-#endif
-
-metadata_storage_t::metadata_storage_t()
-{
-#if ROCPROFSYS_USE_ROCM > 0
-    overwrite_callback_names({
-#    if(ROCPROFILER_VERSION >= 600)
-        { ROCPROFILER_CALLBACK_TRACING_OMPT,
-          { { ROCPROFILER_OMPT_ID_parallel_begin, "omp_parallel" },
-            { ROCPROFILER_OMPT_ID_parallel_end, "omp_parallel" } } }
-#    endif
-    });
-#endif
+    try_store_unique(m_kernel_symbol_info_hash_list, kernel_symbol);
 }
 
 }  // namespace trace_cache

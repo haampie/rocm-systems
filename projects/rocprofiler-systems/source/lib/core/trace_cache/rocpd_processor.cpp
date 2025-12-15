@@ -42,6 +42,8 @@
 #include <timemory/utility/demangle.hpp>
 
 #if ROCPROFSYS_USE_ROCM > 0
+#    include "core/sdk_tracing_names.hpp"
+
 #    include "library/rocprofiler-sdk/fwd.hpp"
 #    include <rocprofiler-sdk/context.h>
 #    include <rocprofiler-sdk/version.h>
@@ -110,9 +112,11 @@ rocpd_processor_t::handle([[maybe_unused]] const memory_copy_sample& _mcs)
     auto& n_info  = node_info::get_instance();
     auto  process = m_metadata->get_process_info();
 
-    auto _name            = std::string{ m_metadata->get_buffer_name_info().at(
-        static_cast<rocprofiler_buffer_tracing_kind_t>(_mcs.kind),
-        static_cast<rocprofiler_tracing_operation_t>(_mcs.operation)) };
+    auto _name = std::string{
+        rocprofiler_sdk::get_tracing_names_registry().get_buffer_name_info().at(
+            static_cast<rocprofiler_buffer_tracing_kind_t>(_mcs.kind),
+            static_cast<rocprofiler_tracing_operation_t>(_mcs.operation))
+    };
     auto name_primary_key = m_data_processor->insert_string(_name.c_str());
 
     auto category_primary_key =
@@ -199,9 +203,10 @@ rocpd_processor_t::handle([[maybe_unused]] const memory_allocate_sample& _mas)
             agent_primary_key =
                 m_agent_manager->get_agent_by_handle(_mas.agent_id_handle).base_id;
         }
-        const auto* _name = m_metadata->get_buffer_name_info().at(
-            static_cast<rocprofiler_buffer_tracing_kind_t>(_mas.kind),
-            static_cast<rocprofiler_tracing_operation_t>(_mas.operation));
+        const auto* _name =
+            rocprofiler_sdk::get_tracing_names_registry().get_buffer_name_info().at(
+                static_cast<rocprofiler_buffer_tracing_kind_t>(_mas.kind),
+                static_cast<rocprofiler_tracing_operation_t>(_mas.operation));
 
         auto [type, level] = memtype_to_db(_name);
 
@@ -225,9 +230,8 @@ rocpd_processor_t::handle([[maybe_unused]] const memory_allocate_sample& _mas)
 }
 
 void
-rocpd_processor_t::handle([[maybe_unused]] const region_sample& _rs)
+rocpd_processor_t::handle(const region_sample& _rs)
 {
-#if ROCPROFSYS_USE_ROCM > 0
     auto& n_info  = node_info::get_instance();
     auto  process = m_metadata->get_process_info();
     auto  thread_primary_key =
@@ -255,13 +259,11 @@ rocpd_processor_t::handle([[maybe_unused]] const region_sample& _rs)
     m_data_processor->insert_region(n_info.id, process.pid, thread_primary_key,
                                     _rs.start_timestamp, _rs.end_timestamp,
                                     name_primary_key, event_primary_key);
-#endif
 }
 
 void
-rocpd_processor_t::handle([[maybe_unused]] const backtrace_region_sample& _bts)
+rocpd_processor_t::handle(const backtrace_region_sample& _bts)
 {
-#if ROCPROFSYS_USE_ROCM > 0
     auto& n_info  = node_info::get_instance();
     auto  process = m_metadata->get_process_info();
     auto  thread_primary_key =
@@ -278,13 +280,11 @@ rocpd_processor_t::handle([[maybe_unused]] const backtrace_region_sample& _bts)
                                     name_primary_key, event_primary_key);
     m_data_processor->insert_sample(_bts.track_name.c_str(), _bts.start_timestamp,
                                     event_primary_key);
-#endif
 }
 
 void
-rocpd_processor_t::handle([[maybe_unused]] const in_time_sample& _its)
+rocpd_processor_t::handle(const in_time_sample& _its)
 {
-#if ROCPROFSYS_USE_ROCM > 0
     auto track_primary_key = m_data_processor->insert_string(_its.track_name.c_str());
 
     auto event_id = m_data_processor->insert_event(
@@ -292,13 +292,11 @@ rocpd_processor_t::handle([[maybe_unused]] const in_time_sample& _its)
         _its.call_stack.c_str(), _its.line_info.c_str(), _its.event_metadata.c_str());
     m_data_processor->insert_sample(_its.track_name.c_str(), _its.timestamp_ns, event_id,
                                     "{}");
-#endif
 }
 
 void
-rocpd_processor_t::handle([[maybe_unused]] const pmc_event_with_sample& _pmc)
+rocpd_processor_t::handle(const pmc_event_with_sample& _pmc)
 {
-#if ROCPROFSYS_USE_ROCM > 0
     auto track_primary_key = m_data_processor->insert_string(_pmc.track_name.c_str());
 
     auto agent_primary_key =
@@ -314,7 +312,6 @@ rocpd_processor_t::handle([[maybe_unused]] const pmc_event_with_sample& _pmc)
 
     m_data_processor->insert_pmc_event(event_id, agent_primary_key,
                                        _pmc.pmc_info_name.c_str(), _pmc.value);
-#endif
 }
 
 void
@@ -520,9 +517,8 @@ rocpd_processor_t::handle([[maybe_unused]] const amd_smi_sample& _amd_smi)
 }
 
 void
-rocpd_processor_t::handle([[maybe_unused]] const cpu_freq_sample& _cpu_freq_sample)
+rocpd_processor_t::handle(const cpu_freq_sample& _cpu_freq_sample)
 {
-#if ROCPROFSYS_USE_ROCM > 0
     struct core_freq_sample
     {
         size_t id;
@@ -585,10 +581,9 @@ rocpd_processor_t::handle([[maybe_unused]] const cpu_freq_sample& _cpu_freq_samp
         insert_event_and_sample(get_track_name(core.id).c_str(),
                                 static_cast<double>(core.value));
     }
-#endif
 }
 
-rocpd_processor_t::rocpd_processor_t(const std::shared_ptr<metadata_storage_t>& md,
+rocpd_processor_t::rocpd_processor_t(const std::shared_ptr<metadata_parser_output_t>& md,
                                      const std::shared_ptr<agent_manager>& agent_mngr,
                                      int pid, int ppid)
 : processor_t<rocpd_processor_t>()
@@ -613,11 +608,6 @@ rocpd_processor_t::finalize_processing()
 void
 rocpd_processor_t::post_process_metadata()
 {
-#if ROCPROFSYS_USE_ROCM > 0
-    if(!get_use_rocpd())
-    {
-        return;
-    }
     ROCPROFSYS_DEBUG("Post processing metadata..\n");
     auto n_info = node_info::get_instance();
 
@@ -726,7 +716,10 @@ rocpd_processor_t::post_process_metadata()
                                              ss.str().c_str());
     }
 
-    auto buffer_info_list = m_metadata->get_buffer_name_info();
+#if ROCPROFSYS_USE_ROCM > 0
+
+    auto buffer_info_list =
+        rocprofiler_sdk::get_tracing_names_registry().get_buffer_name_info();
     for(const auto& buffer_info : buffer_info_list)
     {
         for(const auto& item : buffer_info.items())
@@ -735,7 +728,8 @@ rocpd_processor_t::post_process_metadata()
         }
     }
 
-    auto callback_info_list = m_metadata->get_callback_tracing_info();
+    auto callback_info_list =
+        rocprofiler_sdk::get_tracing_names_registry().get_callback_tracing_info();
     for(const auto& cb_info : callback_info_list)
     {
         for(const auto& item : cb_info.items())
@@ -743,6 +737,8 @@ rocpd_processor_t::post_process_metadata()
             m_data_processor->insert_string(*item.second);
         }
     }
+
+#endif
 
     auto pmc_info_list = m_metadata->get_pmc_info_list();
     for(const auto& pmc_info : pmc_info_list)
@@ -760,7 +756,6 @@ rocpd_processor_t::post_process_metadata()
             pmc_info.units.c_str(), pmc_info.value_type.c_str(), pmc_info.block.c_str(),
             pmc_info.expression.c_str(), pmc_info.is_constant, pmc_info.is_derived);
     }
-#endif
 }
 
 inline void

@@ -41,6 +41,7 @@
 #include <string>
 
 #if ROCPROFSYS_USE_ROCM > 0
+#    include "core/sdk_tracing_names.hpp"
 #    include "library/rocprofiler-sdk/fwd.hpp"
 #    include <rocprofiler-sdk/context.h>
 #endif
@@ -242,7 +243,7 @@ dispatch_in_time_sample(size_t category_enum_id, const in_time_sample& _sample,
 }  // namespace
 
 perfetto_processor_t::perfetto_processor_t(
-    const std::shared_ptr<metadata_storage_t>& metadata,
+    const std::shared_ptr<metadata_parser_output_t>& metadata,
     const std::shared_ptr<agent_manager>& agent_mngr, int pid, int ppid)
 : processor_t<perfetto_processor_t>()
 , m_metadata(metadata)
@@ -527,9 +528,11 @@ perfetto_processor_t::handle([[maybe_unused]] const memory_copy_sample& _mcs)
         m_agent_manager.get_agent_by_handle(_mcs.src_agent_id_handle).logical_node_id;
     auto _dst_agent_log_node_id =
         m_agent_manager.get_agent_by_handle(_mcs.dst_agent_id_handle).logical_node_id;
-    auto _name = std::string{ m_metadata->get_buffer_name_info().at(
-        static_cast<rocprofiler_buffer_tracing_kind_t>(_mcs.kind),
-        static_cast<rocprofiler_tracing_operation_t>(_mcs.operation)) };
+    auto _name = std::string{
+        rocprofiler_sdk::get_tracing_names_registry().get_buffer_name_info().at(
+            static_cast<rocprofiler_buffer_tracing_kind_t>(_mcs.kind),
+            static_cast<rocprofiler_tracing_operation_t>(_mcs.operation))
+    };
 
     auto _track_desc = [](int32_t _device_id_v, rocprofiler_thread_id_t _tid) {
         const auto& _tid_v = thread_info::get(_tid, SystemTID);

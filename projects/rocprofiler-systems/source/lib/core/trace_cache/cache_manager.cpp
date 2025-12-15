@@ -182,8 +182,8 @@ struct enabled_formats_t
 struct processor_config_t
 {
     processor_config_t(pid_t pid, pid_t ppid,
-                       std::shared_ptr<metadata_storage_t> metadata_storage_ptr,
-                       std::shared_ptr<agent_manager>      agent_manager_ptr)
+                       std::shared_ptr<metadata_parser_output_t> metadata_storage_ptr,
+                       std::shared_ptr<agent_manager>            agent_manager_ptr)
     : _pid(pid)
     , _ppid(ppid)
     , _metadata_storage(std::move(metadata_storage_ptr))
@@ -193,8 +193,8 @@ struct processor_config_t
     pid_t _pid;
     pid_t _ppid;
 
-    std::shared_ptr<metadata_storage_t> _metadata_storage;
-    std::shared_ptr<agent_manager>      _agent_manager;
+    std::shared_ptr<metadata_parser_output_t> _metadata_storage;
+    std::shared_ptr<agent_manager>            _agent_manager;
 };
 
 struct processor_storage_t
@@ -470,7 +470,7 @@ create_processor_configs(const data::mapped_cache_files_t& _cache_files,
             continue;
         }
 
-        auto _metadata_storage = std::make_shared<metadata_storage_t>();
+        auto _metadata_parser_output = std::make_shared<metadata_parser_output_t>();
 
         storage_parser<info::metadata_identifier_t, info::process, info::pmc,
                        info::thread, info::track, info::queue, info::stream,
@@ -481,13 +481,13 @@ create_processor_configs(const data::mapped_cache_files_t& _cache_files,
         std::vector<std::shared_ptr<agent>> _agents;
 
         auto _metadata_parser_handler =
-            std::make_shared<metadata_parser_handler_t>(_metadata_storage, _agents);
+            std::make_shared<metadata_parser_handler_t>(_metadata_parser_output, _agents);
         _metadata_parser.load(_metadata_parser_handler);
 
         auto _agent_manager = std::make_shared<agent_manager>(_agents);
 
         processor_configs.push_back(std::make_shared<data::processor_config_t>(
-            pid, _root_pid, _metadata_storage, _agent_manager));
+            pid, _root_pid, _metadata_parser_output, _agent_manager));
     }
     return processor_configs;
 }

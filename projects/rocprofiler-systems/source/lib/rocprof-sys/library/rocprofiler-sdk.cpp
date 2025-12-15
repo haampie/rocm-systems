@@ -594,6 +594,44 @@ cache_memory_allocation(rocprofiler_buffer_tracing_memory_allocation_record_t* r
 }
 #endif
 
+void
+cache_code_object_load(
+    const rocprofiler_callback_tracing_code_object_load_data_t& code_object)
+{
+    trace_cache::info::code_object co_info;
+    co_info.code_object_id = code_object.code_object_id;
+    co_info.uri            = code_object.uri ? std::string(code_object.uri) : "";
+    co_info.load_base      = code_object.load_base;
+    co_info.load_size      = code_object.load_size;
+    co_info.load_delta     = code_object.load_delta;
+    co_info.storage_type   = static_cast<int32_t>(code_object.storage_type);
+#if(ROCPROFILER_VERSION >= 600)
+    co_info.agent_id_handle = code_object.agent_id.handle;
+#else
+    co_info.agent_id_handle = code_object.rocp_agent.handle;
+#endif
+
+    trace_cache::get_metadata_registry().add_code_object(co_info);
+}
+
+void
+cache_kernel_symbol_register(
+    const rocprofiler_callback_tracing_code_object_kernel_symbol_register_data_t&
+        kernel_symbol)
+{
+    trace_cache::info::kernel_symbol ks_info;
+    ks_info.kernel_id      = kernel_symbol.kernel_id;
+    ks_info.code_object_id = kernel_symbol.code_object_id;
+    ks_info.kernel_name =
+        kernel_symbol.kernel_name ? std::string(kernel_symbol.kernel_name) : "";
+    ks_info.kernel_object             = kernel_symbol.kernel_object;
+    ks_info.kernarg_segment_size      = kernel_symbol.kernarg_segment_size;
+    ks_info.kernarg_segment_alignment = kernel_symbol.kernarg_segment_alignment;
+    ks_info.group_segment_size        = kernel_symbol.group_segment_size;
+
+    trace_cache::get_metadata_registry().add_kernel_symbol(ks_info);
+}
+
 template <typename CategoryT>
 void
 tool_tracing_callback_start(CategoryT, rocprofiler_callback_tracing_record_t record,
@@ -855,7 +893,8 @@ tool_code_object_callback(rocprofiler_callback_tracing_record_t record,
                     _data.emplace_back(
                         code_object_callback_record_t{ ts, record, data_v });
                 });
-                trace_cache::get_metadata_registry().add_code_object(data_v);
+
+                cache_code_object_load(data_v);
             }
             else if(record.operation ==
                     ROCPROFILER_CODE_OBJECT_DEVICE_KERNEL_SYMBOL_REGISTER)
@@ -866,7 +905,8 @@ tool_code_object_callback(rocprofiler_callback_tracing_record_t record,
                         _data.emplace_back(
                             new kernel_symbol_callback_record_t{ ts, record, data_v });
                     });
-                trace_cache::get_metadata_registry().add_kernel_symbol(data_v);
+
+                cache_kernel_symbol_register(data_v);
             }
         }
         return;

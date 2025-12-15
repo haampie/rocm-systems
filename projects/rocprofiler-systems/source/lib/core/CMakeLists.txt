@@ -86,6 +86,11 @@ set(core_headers
     ${CMAKE_CURRENT_LIST_DIR}/node_info.hpp
 )
 
+if(ROCPROFSYS_USE_ROCM)
+    list(APPEND core_sources ${CMAKE_CURRENT_LIST_DIR}/sdk_tracing_names.cpp)
+    list(APPEND core_headers ${CMAKE_CURRENT_LIST_DIR}/sdk_tracing_names.hpp)
+endif()
+
 add_library(rocprofiler-systems-core-library STATIC)
 add_library(
     rocprofiler-systems::rocprofiler-systems-core

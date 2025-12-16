@@ -32,6 +32,7 @@
 #include "core/trace_cache/cache_manager.hpp"
 #include "core/trace_cache/metadata_registry.hpp"
 #include "core/trace_cache/sample_type.hpp"
+#include "core/trace_cache/utility.hpp"
 #include "library/components/cpu_freq.hpp"
 #include "library/thread_info.hpp"
 

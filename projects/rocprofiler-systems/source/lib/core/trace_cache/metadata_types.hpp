@@ -603,7 +603,7 @@ info::string_entry inline deserialize(uint8_t*& buffer)
     info::string_entry item;
     std::string_view   value_view;
     utility::parse_value(buffer, value_view);
-    item.value = std::string(value_view);
+    item.value = value_view;
     return item;
 }
 
@@ -613,7 +613,6 @@ size_t inline get_size(const info::string_entry& item)
     return utility::get_size(std::string_view(item.value));
 }
 
-#if ROCPROFSYS_USE_ROCM > 0
 template <>
 void inline serialize(uint8_t* buffer, const info::code_object& item)
 {
@@ -675,7 +674,6 @@ size_t inline get_size(const info::kernel_symbol& item)
         item.group_segment_size, item.private_segment_size, item.sgpr_count,
         item.arch_vgpr_count, item.accum_vgpr_count);
 }
-#endif
 
 template <>
 void inline serialize(uint8_t* buffer, const info::agent_t& item)

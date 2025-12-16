@@ -36,11 +36,13 @@ metadata_parser_output_t::get_process_info() const
 {
     return m_process;
 }
+
 info::process_start_time
 metadata_parser_output_t::get_process_start_time() const
 {
     return m_process_start_time;
 }
+
 info::process_end_time
 metadata_parser_output_t::get_process_end_time() const
 {
@@ -52,41 +54,49 @@ metadata_parser_output_t::get_pmc_info_list() const
 {
     return m_pmc_info_list;
 }
+
 std::vector<info::thread>
 metadata_parser_output_t::get_thread_info_list() const
 {
     return m_thread_info_list;
 }
+
 std::vector<info::track>
 metadata_parser_output_t::get_track_info_list() const
 {
     return m_track_info_list;
 }
+
 std::vector<info::queue>
 metadata_parser_output_t::get_queue_list() const
 {
     return m_queue_list;
 }
+
 std::vector<info::stream>
 metadata_parser_output_t::get_stream_list() const
 {
     return m_stream_list;
 }
+
 std::vector<std::string>
 metadata_parser_output_t::get_string_list() const
 {
     return m_string_entry_list;
 }
+
 std::vector<info::code_object>
 metadata_parser_output_t::get_code_object_list() const
 {
     return m_code_object_info_list;
 }
+
 std::vector<info::kernel_symbol>
 metadata_parser_output_t::get_kernel_symbol_list() const
 {
     return m_kernel_symbol_info_list;
 }
+
 std::vector<info::agent_t>
 metadata_parser_output_t::get_agents() const
 {
@@ -102,6 +112,7 @@ metadata_parser_output_t::get_code_object(uint64_t code_object_id) const
     return it != m_code_object_info_list.end() ? std::optional<info::code_object>(*it)
                                                : std::nullopt;
 }
+
 std::optional<info::kernel_symbol>
 metadata_parser_output_t::get_kernel_symbol(uint64_t kernel_id) const
 {
@@ -129,31 +140,37 @@ metadata_parser_output_t::set_process_end_time(
 {
     m_process_end_time = process_end_time;
 }
+
 void
 metadata_parser_output_t::add_pmc_info(const info::pmc& pmc_info)
 {
     m_pmc_info_list.push_back(pmc_info);
 }
+
 void
 metadata_parser_output_t::add_thread_info(const info::thread& thread_info)
 {
     m_thread_info_list.push_back(thread_info);
 }
+
 void
 metadata_parser_output_t::add_track(const info::track& track_info)
 {
     m_track_info_list.push_back(track_info);
 }
+
 void
 metadata_parser_output_t::add_queue(const info::queue& queue_info)
 {
     m_queue_list.push_back(queue_info);
 }
+
 void
 metadata_parser_output_t::add_stream(const info::stream& stream_info)
 {
     m_stream_list.push_back(stream_info);
 }
+
 void
 metadata_parser_output_t::add_string(const info::string_entry& string_entry)
 {
@@ -171,6 +188,7 @@ metadata_parser_output_t::add_code_object(const info::code_object& code_object)
 {
     m_code_object_info_list.push_back(code_object);
 }
+
 void
 metadata_parser_output_t::add_kernel_symbol(const info::kernel_symbol& kernel_symbol)
 {

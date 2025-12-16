@@ -23,7 +23,6 @@
 set(trace_cache_sources
     ${CMAKE_CURRENT_LIST_DIR}/cache_manager.cpp
     ${CMAKE_CURRENT_LIST_DIR}/buffer_storage.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/metadata_registry.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rocpd_processor.cpp
     ${CMAKE_CURRENT_LIST_DIR}/perfetto_processor.cpp
     ${CMAKE_CURRENT_LIST_DIR}/metadata_storage.cpp

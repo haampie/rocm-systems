@@ -31,6 +31,7 @@
 #include "core/rocpd/data_storage/database.hpp"
 #include "core/trace_cache/metadata_registry.hpp"
 #include "core/trace_cache/sample_type.hpp"
+#include "core/trace_cache/utility.hpp"
 #include "library/thread_info.hpp"
 
 #include <cstdint>

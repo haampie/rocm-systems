@@ -21,14 +21,17 @@
 # SOFTWARE.
 
 set(trace_cache_tests_sources
-    test_type_registry.cpp
-    test_cacheable.cpp
     test_buffer_storage.cpp
-    test_storage_parser.cpp
-    test_flush_worker.cpp
-    test_mmap_flush_worker.cpp
     test_cache_integration.cpp
+    test_cacheable.cpp
+    test_flush_worker.cpp
+    test_metadata_storage.cpp
+    test_metadata_types.cpp
+    test_mmap_flush_worker.cpp
     test_sample_type.cpp
+    test_storage_parser.cpp
+    test_type_registry.cpp
+    test_metadata_registry.cpp
 )
 
 add_library(trace-cache-tests OBJECT ${trace_cache_tests_sources})

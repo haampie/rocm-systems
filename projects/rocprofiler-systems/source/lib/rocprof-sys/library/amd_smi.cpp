@@ -46,6 +46,7 @@
 #include "core/perfetto.hpp"
 #include "core/state.hpp"
 #include "core/trace_cache/metadata_registry.hpp"
+#include "core/trace_cache/utility.hpp"
 #include "library/amd_smi.hpp"
 #include "library/runtime.hpp"
 #include "library/thread_info.hpp"

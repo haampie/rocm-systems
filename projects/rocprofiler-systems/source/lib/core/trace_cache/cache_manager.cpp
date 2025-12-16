@@ -561,7 +561,7 @@ cache_manager::get_instance()
 
 cache_manager::cache_manager(std::string buffer_filename, std::string metadata_filename)
 : m_storage(std::move(buffer_filename))
-, m_metadata(std::make_shared<metadata_registry_t>(std::move(metadata_filename)))
+, m_metadata(std::make_shared<metadata_registry_t<>>(std::move(metadata_filename)))
 {}
 
 void

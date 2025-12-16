@@ -29,9 +29,7 @@
 #include "core/utility.hpp"
 #include "library/tracing.hpp"
 #include "perfetto.hpp"
-#include "trace_cache/metadata_registry.hpp"
 #include "trace_cache/sample_type.hpp"
-#include "trace_cache/storage_parser.hpp"
 
 #include <cstdint>
 #include <nlohmann/json.hpp>

@@ -46,19 +46,19 @@ using buffer_storage_t = buffer_storage<mmap_flush_worker_factory_t<>, type_iden
 class cache_manager
 {
 public:
-    static cache_manager& get_instance();
-    buffer_storage_t&     get_buffer_storage() { return m_storage; }
-    metadata_registry_t&  get_metadata_registry() { return *m_metadata; }
-    void                  shutdown();
-    void                  post_process_bulk();
+    static cache_manager&  get_instance();
+    buffer_storage_t&      get_buffer_storage() { return m_storage; }
+    metadata_registry_t<>& get_metadata_registry() { return *m_metadata; }
+    void                   shutdown();
+    void                   post_process_bulk();
 
 private:
     cache_manager(std::string buffer_filename, std::string metadata_filename);
-    buffer_storage_t                     m_storage;
-    std::shared_ptr<metadata_registry_t> m_metadata;
+    buffer_storage_t                       m_storage;
+    std::shared_ptr<metadata_registry_t<>> m_metadata;
 };
 
-inline metadata_registry_t&
+inline metadata_registry_t<>&
 get_metadata_registry()
 {
     return cache_manager::get_instance().get_metadata_registry();

@@ -8,6 +8,7 @@ Full documentation for ROCm Systems Profiler is available at [https://rocm.docs.
 
 ### Added
 
+- `rocprof-sys-attach` CLI tool for attaching to and profiling running processes via rocprofiler-sdk rocattach API (experimental).
 - Documentation for `--trace-legacy` / `-L` CLI flag for direct tracing mode.
 - Added dependency to `spdlog` library.
 - Added environment variable `ROCPROFSYS_LOG_LEVEL` which control level of logging.

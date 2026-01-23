@@ -650,6 +650,7 @@ global:
     hipExtSetLoggingParams;
     hipMemSetMemPool;
     hipMemGetMemPool;
+    hipKernelGetAttribute;
 local:
     *;
 } hip_7.1;

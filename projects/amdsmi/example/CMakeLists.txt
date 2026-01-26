@@ -61,3 +61,7 @@ if(ENABLE_ESMI_LIB)
     target_link_libraries(${ESMI_SAMPLE_EXE} amd_smi)
     target_compile_definitions(${ESMI_SAMPLE_EXE} PUBLIC ENABLE_ESMI_LIB)
 endif()
+
+set(project ras_cper)
+add_executable(ras_cper "amd_smi_cper.cc")
+target_link_libraries(ras_cper amd_smi)

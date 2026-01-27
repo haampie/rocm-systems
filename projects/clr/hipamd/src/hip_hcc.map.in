@@ -650,6 +650,7 @@ global:
     hipExtSetLoggingParams;
     hipMemSetMemPool;
     hipMemGetMemPool;
+    hipMemPrefetchBatchAsync;
 local:
     *;
 } hip_7.1;

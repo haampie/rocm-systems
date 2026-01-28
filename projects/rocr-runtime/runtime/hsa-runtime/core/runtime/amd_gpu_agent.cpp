@@ -3536,5 +3536,17 @@ hsa_status_t GpuAgent::ReleaseCountedQueue(hsa_queue_t* queue) {
   return queue_pool_.ReleaseQueue(queue);
 }
 
+hsa_status_t GpuAgent::Preload(uint64_t flags) {
+  if (flags & HSA_AMD_AGENT_PRELOAD_CLOCK_SYNC) {
+    CheckClockTicks();
+  }
+
+  if (flags & HSA_AMD_AGENT_PRELOAD_BLITS) {
+    PreloadBlits();
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
 }  // namespace amd
 }  // namespace rocr

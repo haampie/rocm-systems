@@ -308,13 +308,14 @@ void genRandomMasks(LinearAllocGuard<T>& d_buf,
 // which is problematic)
 template <class Gen>
 __half genRandomHalf(std::uniform_int_distribution<unsigned short>& dist,
-                     Gen& gen)
+                     Gen& gen,
+                     unsigned char exponent)
 {
   __half_raw tmp;
-  unsigned short randomNum = dist(gen);
+  unsigned short mantissa = dist(gen) & 0x7ff;
 
-  printf("randomNum: %u\n", randomNum);
-  tmp.x = randomNum;
+  tmp.x = (exponent << 11) | mantissa;
+
   // rewrite the exponent to force the number to be (-8<x<8) and at the same time avoid NaN or
   // infinity
   tmp.x &= 0xBBFF;
@@ -332,13 +333,18 @@ void genRandomBuffers(LinearAllocGuard<T>& d_buf,
   int numBytes = numItems * sizeof(T);
   LinearAllocGuard<T> tmp(LinearAllocs::malloc, numBytes);
   LinearAllocGuard<T> d_tmp(LinearAllocs::hipMalloc, numBytes);
+  // when using __half we create all the number with the same exponent. That
+  // makes testing easier, as if they are all different exponents, they will have
+  // very different precissions and we will get bigger differences between the
+  // CPU and the GPU
+  unsigned char exponent = dist(gen) % 32;
 
   buf = std::move(tmp);
   d_buf = std::move(d_tmp);
 
   for (int i = 0; i < numItems; i++)
     if constexpr (std::is_same<T, __half>::value) {
-      buf.ptr()[i] = genRandomHalf(dist, gen);
+      buf.ptr()[i] = genRandomHalf(dist, gen, exponent);
       std::ios::fmtflags flags(std::cout.flags());
       const unsigned char* ptr = reinterpret_cast<const unsigned char*>(&buf.ptr()[i]);
 
@@ -415,7 +421,7 @@ void printMismatch(const T& result, const T& expected, const T* input, unsigned 
 
         std::cout << "Lane " << i << ": " << __half2float(input[i])
                   << std::hex
-                  << " (0x" << static_cast<int>(ptr[0]) << static_cast<int>(ptr[1]) << ")"
+                  << " (0x" << static_cast<int>(ptr[1]) << static_cast<int>(ptr[0]) << ")"
                   << "\n";
         std::cout.flags(flags);
       } else {
@@ -485,6 +491,7 @@ void runTestReduce(int iteration, Reduce reduce)
 {
   using namespace Catch::Matchers;
   using distribution = typename DistributionType<T>::type;
+  using ABType = typename std::conditional<std::is_same<T, __half>::value, unsigned short, T>::type;
   unsigned int wavefrontSize = getWarpSize();
   // one result per reduce per thread to be checked
   LinearAllocGuard<T> d_output(LinearAllocs::hipMalloc, kNumReduces * wavefrontSize * sizeof(T));
@@ -493,8 +500,8 @@ void runTestReduce(int iteration, Reduce reduce)
   // for float16, we generate any random unsigned short, but cap the exponent later on
   // to keep it in the range (-8.0..8.0) (just to avoid overflows)
   // On the rest of the types, just use a bigger reduced range of numbers to avoid overflows too
-  T a = std::is_same<T, half>::value? std::numeric_limits<unsigned short>::lowest() : -1023;
-  T b = std::is_same<T, half>::value? std::numeric_limits<unsigned short>::max() : 1023;
+  ABType a = std::is_same<T, half>::value? std::numeric_limits<unsigned short>::lowest() : -1023;
+  ABType b = std::is_same<T, half>::value? std::numeric_limits<unsigned short>::max() : 1023;
   distribution dist(a, b);
   LinearAllocGuard<T> input, d_input;
   LinearAllocGuard<unsigned long long> masks, d_masks;

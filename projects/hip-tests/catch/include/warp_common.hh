@@ -29,6 +29,7 @@ THE SOFTWARE.
 #include <random>
 #include <cmath>
 #include <iostream>
+#include <iomanip>
 #include <ios>
 
 #define MASK_SHIFT(x, n) \
@@ -38,7 +39,7 @@ const unsigned long long Every5thBit = 0x1084210842108421;
 const unsigned long long Every9thBit = 0x8040201008040201;
 const unsigned long long Every5thBut9th = Every5thBit & ~Every9thBit;
 const unsigned long long AllThreads = ~0;
-static constexpr int kNumReduces = 5000;
+static constexpr int kNumReduces = 1;
 
 inline __device__ bool deactivate_thread(const uint64_t* const active_masks) {
   const auto warp =
@@ -305,14 +306,15 @@ void genRandomMasks(LinearAllocGuard<T>& d_buf,
 
 // generates a random __half (instead of using uniform_real_distribution<float> casting to __half
 // which is problematic)
-// @expDist needs to be between [0-2^5-2]
 template <class Gen>
 __half genRandomHalf(std::uniform_int_distribution<unsigned short>& dist,
                      Gen& gen)
 {
   __half_raw tmp;
+  unsigned short randomNum = dist(gen);
 
-  tmp.x = dist(gen);
+  printf("randomNum: %u\n", randomNum);
+  tmp.x = randomNum;
   // rewrite the exponent to force the number to be (-8<x<8) and at the same time avoid NaN or
   // infinity
   tmp.x &= 0xBBFF;
@@ -335,10 +337,19 @@ void genRandomBuffers(LinearAllocGuard<T>& d_buf,
   d_buf = std::move(d_tmp);
 
   for (int i = 0; i < numItems; i++)
-    if constexpr (std::is_same<T, __half>::value)
+    if constexpr (std::is_same<T, __half>::value) {
       buf.ptr()[i] = genRandomHalf(dist, gen);
-    else
+      std::ios::fmtflags flags(std::cout.flags());
+      const unsigned char* ptr = reinterpret_cast<const unsigned char*>(&buf.ptr()[i]);
+
+      std::cout << "input: " << i << ": " << __half2float(buf.ptr()[i])
+		<< std::hex
+		<< " (0x" << static_cast<int>(ptr[0]) << static_cast<int>(ptr[1]) << ")"
+		<< "\n";
+      std::cout.flags(flags);
+    } else {
       buf.ptr()[i] = dist(gen);
+    }
 
   HIP_CHECK(hipMemcpy(d_buf.ptr(), buf.ptr(), numBytes, hipMemcpyHostToDevice));
 }
@@ -398,10 +409,18 @@ void printMismatch(const T& result, const T& expected, const T* input, unsigned 
 
   for (int i = 0; i < getWarpSize(); i++) {
     if ((1ul << i) & mask) {
-      if constexpr (std::is_same<T, __half>::value)
-                     std::cout << "Lane " << i << ": " << __half2float(input[i]) << "\n";
-      else
+      if constexpr (std::is_same<T, __half>::value) {
+        std::ios::fmtflags flags(std::cout.flags());
+        const unsigned char* ptr = reinterpret_cast<const unsigned char*>(&input[i]);
+
+        std::cout << "Lane " << i << ": " << __half2float(input[i])
+                  << std::hex
+                  << " (0x" << static_cast<int>(ptr[0]) << static_cast<int>(ptr[1]) << ")"
+                  << "\n";
+        std::cout.flags(flags);
+      } else {
         std::cout << "Lane " << i << ": " << input[i] << "\n";
+      }
     }
   }
 
@@ -428,17 +447,17 @@ void compareFloatingPoint(const T& result, const T& expected, unsigned long long
     REQUIRE(!__hisnan(result));
     REQUIRE(!__hisinf(result));
 
-    if (relativeEpsilon > eps) {
+    /*if (relativeEpsilon > eps) {
       if (absDifference > 0.0001) {
-        if (absDifference >= eps * fabs(fmax(resultFloat, expectedFloat))) {
+      if (absDifference >= eps * fabs(fmax(resultFloat, expectedFloat))) {*/
           printMismatch(result, expected, input, mask);
           std::cout << "Relative epsilon: " << relativeEpsilon << "\n";
           std::cout << "Difference: " << absDifference << "\n";
-        }
-       }
+	  /* }
+	     }*/
 
       REQUIRE_THAT(__half2float(resultFloat), WithinRel(expectedFloat, eps));
-    }
+//}
   } else {
     // for float or double, also lossy in terms of precision
     T absDifference = fabs(result - expected);

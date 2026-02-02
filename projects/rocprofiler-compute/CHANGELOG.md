@@ -29,6 +29,8 @@ Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.
 
 * Detection of MPI ranks while profiling and creation of output directories based on MPI rank.
 
+* Added missing metric descriptions for gfx942 architecture
+
 ### Changed
 
 * Default output format for the underlying ROCprofiler-SDK tool has been changed from ``csv`` to ``rocpd``.

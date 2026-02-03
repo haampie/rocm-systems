@@ -258,3 +258,4 @@ Full documentation for ROCprofiler-SDK is available at [rocm.docs.amd.com/projec
 - Addressed OpenMP Tools task scheduling null pointer exception.
 - Fixed stream ID errors arising during process attachment.
 - Fixed issues arising during dynamic code object loading.
+- Fixed rocpd OTF2 output to add ACCELERATOR_DEVICE as system tree node domain for AMD devices.

@@ -296,3 +296,13 @@ Full documentation for ROCprofiler-SDK is available at [rocm.docs.amd.com/projec
 - Addressed OpenMP Tools task scheduling null pointer exception.
 - Fixed stream ID errors arising during process attachment.
 - Fixed issues arising during dynamic code object loading.
+
+## ROCprofiler-SDK 1.1.1
+
+### Added
+
+- Added late initialization support for AI frameworks
+
+### Optimized
+
+### Resolved issues

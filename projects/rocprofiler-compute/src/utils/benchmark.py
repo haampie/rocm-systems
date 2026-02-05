@@ -26,7 +26,6 @@
 import csv
 import fcntl
 import math
-import os
 from collections import namedtuple
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -178,12 +177,8 @@ DEFAULT_DATASET_SIZE = 512 * 1024 * 1024
 
 
 def get_lock_dir() -> Path:
-    """Get directory for GPU benchmark lock files.
-
-    Fallback: ROCPROF_COMPUTE_LOCK_DIR -> TMPDIR -> /tmp
-    """
-    base = os.environ.get("ROCPROF_COMPUTE_LOCK_DIR", os.environ.get("TMPDIR", "/tmp"))
-    lock_dir = Path(base) / "rocprof-compute"
+    """Get directory for GPU benchmark lock files."""
+    lock_dir = Path("/tmp/rocprof-compute")
     lock_dir.mkdir(parents=True, exist_ok=True)
     return lock_dir
 

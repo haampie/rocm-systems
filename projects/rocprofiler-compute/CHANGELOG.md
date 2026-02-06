@@ -25,6 +25,10 @@ Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.
 * Synced latest metric descriptions to public facing documentation
     * Updated metric units to be more human readable in public facing documentation
 
+* GPU benchmark locking to prevent concurrent profiling conflicts on the same GPU
+    * Multiple rocprof-compute processes can safely profile different GPUs in parallel
+    * Processes attempting to benchmark the same GPU will wait with user-visible feedback
+
 ### Changed
 
 * Default output format for the underlying ROCprofiler-SDK tool has been changed from ``csv`` to ``rocpd``.

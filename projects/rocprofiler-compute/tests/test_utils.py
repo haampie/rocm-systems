@@ -8002,3 +8002,66 @@ def test_noise_clamper_instance_isolation():
 
     assert clamper1.get_stats()["count"] == 1
     assert clamper2.get_stats()["count"] == 2
+
+
+# =============================================================================
+# GPU Benchmark Locking Tests
+# =============================================================================
+
+
+@pytest.mark.misc
+def test_gpu_benchmark_locking(tmp_path, monkeypatch, capsys):
+    """Test GPU benchmark locking functions."""
+    import fcntl
+
+    import utils.benchmark as benchmark
+
+    # --- Test lock acquisition and lock file creation ---
+    lock_dir_for_lock = tmp_path / "locks"
+    lock_dir_for_lock.mkdir()
+
+    # Mock get GPU UUID
+    monkeypatch.setattr(
+        benchmark.hip,
+        "hipGetDeviceProperties",
+        lambda d: mock.Mock(uuid=mock.Mock(uuid=bytes([0x01, 0x02, 0x03, 0x04]))),
+    )
+
+    # Mock Path to use our temp directory
+    original_path = Path
+
+    def mock_path(p):
+        if p == "/tmp/rocprof-compute-benchmark":
+            return lock_dir_for_lock
+        return original_path(p)
+
+    monkeypatch.setattr(benchmark, "Path", mock_path)
+
+    with benchmark.gpu_benchmark_lock(0):
+        lock_file = lock_dir_for_lock / "rocprof-compute-benchmark-01020304.lock"
+        assert lock_file.exists()
+
+    # --- Test no message when lock acquired immediately ---
+    capsys.readouterr()  # Clear previous output
+    with benchmark.gpu_benchmark_lock(0):
+        pass
+    output = capsys.readouterr().out
+    assert "Waiting" not in output
+
+    # --- Test waiting/acquired messages when lock is contended ---
+    call_count = {"count": 0}
+
+    def mock_flock(fd, op):
+        call_count["count"] += 1
+        if call_count["count"] == 1 and (op & fcntl.LOCK_NB):
+            raise BlockingIOError("Lock held by another process")
+
+    monkeypatch.setattr(benchmark.fcntl, "flock", mock_flock)
+
+    with benchmark.gpu_benchmark_lock(0):
+        pass
+
+    output = capsys.readouterr().out
+    assert "Waiting for GPU 0" in output
+    assert "another rocprof-compute benchmark is in progress" in output
+    assert "Acquired lock for GPU 0" in output

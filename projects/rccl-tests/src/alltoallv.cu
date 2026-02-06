@@ -11,6 +11,8 @@
 
 #define USE_RCCL_GATHER_SCATTER
 
+#pragma weak ncclAlltoAllv
+
 void AlltoAllvGetCollByteCount(size_t *sendcount, size_t *recvcount, size_t *paramcount, size_t *sendInplaceOffset, size_t *recvInplaceOffset, size_t count, size_t eltSize, int nranks) {
   if (count < nranks*nranks/2) {
     *sendcount = 0;
@@ -84,7 +86,10 @@ void AlltoAllvGetBw(size_t count, int typesize, double sec, double* algBw, doubl
   *busBw = baseBw * factor;
 }
 
-testResult_t AlltoAllvRunColl(void* sendbuff, void* recvbuff, size_t count, ncclDataType_t type, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream, void* bias = nullptr) {
+testResult_t AlltoAllvRunColl(void* sendbuff, size_t sendoffset, void* recvbuff, size_t recvoffset, size_t count, ncclDataType_t type, ncclRedOp_t op, int root, ncclComm_t comm, cudaStream_t stream, int deviceImpl, void* bias = nullptr) {
+  char* sptr = (char*)sendbuff + sendoffset;
+  char* rptr = (char*)recvbuff + recvoffset;
+  
   int nranks;
   NCCLCHECK(ncclCommCount(comm, &nranks));
   int rank;
@@ -118,14 +123,31 @@ testResult_t AlltoAllvRunColl(void* sendbuff, void* recvbuff, size_t count, nccl
   printf("NCCL 2.7 or later is needed for alltoallv. This test was compiled with %d.%d.\n", NCCL_MAJOR, NCCL_MINOR);
   return testNcclError;
 #else
-#if defined(RCCL_ALLTOALLV) && defined(USE_RCCL_GATHER_SCATTER)
-  NCCLCHECK(ncclAllToAllv(sendbuff, sendcounts+rank*nranks, sdispls+rank*nranks, recvbuff, recvcounts+rank*nranks, rdispls+rank*nranks, type, comm, stream));
+#if defined(RCCL_ALLTOALLV) && defined(USE_RCCL_GATHER_SCATTER) && NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,28,0)
+  if (test_ncclVersion >= NCCL_VERSION(2,28,0)) {
+    NCCLCHECK(ncclAlltoAllv(sptr, sendcounts+rank*nranks, sdispls+rank*nranks, rptr, recvcounts+rank*nranks, rdispls+rank*nranks, type, comm, stream));
+  }
+#endif
+#if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
+  if (test_ncclVersion >= NCCL_VERSION(2,19,0)) {
+    NCCLCHECK(ncclAllToAllv(sptr, sendcounts+rank*nranks, sdispls+rank*nranks, rptr, recvcounts+rank*nranks, rdispls+rank*nranks, type, comm, stream));
+  }
+  else {
+    printf("NCCL 2.19 or later is needed for RCCL_ALLTOALLV feature. This test was compiled with %d.%d.\n", NCCL_MAJOR, NCCL_MINOR);
+    free(sendcounts);
+    free(recvcounts);
+    free(sdispls);
+    free(rdispls);
+    return testNcclError;
+  }
+#endif
 #else
   NCCLCHECK(ncclGroupStart());
   for (int r=0; r<nranks; r++) {
     if (sendcounts[r+rank*nranks] != 0) {
       NCCLCHECK(ncclSend(
-          ((char*)sendbuff) + sdispls[r+rank*nranks] * wordSize(type),
+          sptr + sdispls[r+rank*nranks] * wordSize(type),
           sendcounts[r+rank*nranks],
           type,
           r,
@@ -134,7 +156,7 @@ testResult_t AlltoAllvRunColl(void* sendbuff, void* recvbuff, size_t count, nccl
     }
     if (recvcounts[r+rank*nranks] != 0) {
       NCCLCHECK(ncclRecv(
-          ((char*)recvbuff) + rdispls[r+rank*nranks] * wordSize(type),
+          rptr + rdispls[r+rank*nranks] * wordSize(type),
           recvcounts[r+rank*nranks],
           type,
           r,
@@ -189,6 +211,6 @@ testResult_t AlltoAllvRunTest(struct threadArgs* args, int root, ncclDataType_t 
 }
 
 struct testEngine ncclTestEngine = {
-  AlltoAllvGetBuffSize,
-  AlltoAllvRunTest
+  .getBuffSize = AlltoAllvGetBuffSize,
+  .runTest = AlltoAllvRunTest
 };

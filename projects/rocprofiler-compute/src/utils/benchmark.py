@@ -205,7 +205,10 @@ def gpu_benchmark_lock(device: int) -> Generator[None, None, None]:
                 flush=True,
             )
             fcntl.flock(f, fcntl.LOCK_EX)  # Blocking wait
-            print(f"Acquired lock for GPU {device}, proceeding with benchmark.")
+            print(
+                f"Acquired lock for GPU {device}, proceeding with benchmark.",
+                flush=True,
+            )
         try:
             yield
         finally:

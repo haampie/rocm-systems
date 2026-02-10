@@ -25,6 +25,10 @@ Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.
 * Synced latest metric descriptions to public facing documentation
     * Updated metric units to be more human readable in public facing documentation
 
+* ``--output-directory`` option in profile mode to provide parameterized output directory for the profiling data.
+
+* Detection of MPI ranks while profiling and creation of output directories based on MPI rank.
+
 * GPU benchmark locking for Roofline benchmarking to prevent concurrent profiling conflicts on the same GPU
     * Multiple rocprof-compute processes can safely profile on different GPUs in parallel
     * Processes attempting to benchmark on the same GPU will wait with user-visible feedback and execute sequentially
@@ -78,6 +82,10 @@ Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.
 ### Optimized
 
 * Improved the responsiveness of menu and dropdown buttons in TUI analyze mode for a smoother user experience.
+
+### Deprecated
+
+* ``--path`` and ``--subpath`` have been deprecated and replaced with a unified ``--output-directory``
 
 ## ROCm Compute Profiler 3.4.0 for ROCm 7.2.0
 

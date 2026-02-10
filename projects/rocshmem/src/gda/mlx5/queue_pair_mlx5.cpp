@@ -40,17 +40,17 @@ __device__ void QueuePair::mlx5_ring_doorbell(uint64_t db_val, uint64_t my_sq_co
   __hip_atomic_store(&db.uint, db_uint, __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
 }
 
-__device__ void QueuePair::mlx5_quiet() {
+__device__ void QueuePair::mlx5_quiet(ActiveWFInfo &wf_info) {
   constexpr size_t BROADCAST_SIZE = 1024 / WF_SIZE;
   __shared__ uint64_t wqe_broadcast[BROADCAST_SIZE];
   uint8_t wavefront_id = get_flat_block_id() / WF_SIZE;
   wqe_broadcast[wavefront_id] = 0;
 
-  uint64_t activemask = get_active_lane_mask();
-  uint8_t num_active_lanes = get_active_lane_count(activemask);
-  uint8_t my_logical_lane_id = get_active_lane_num(activemask);
-  bool is_leader{my_logical_lane_id == 0};
-  const uint64_t leader_phys_lane_id = get_first_active_lane_id(activemask);
+  uint64_t activemask         = wf_info.pe_group_mask; //get_active_lane_mask();
+  uint8_t num_active_lanes    = wf_info.num_pe_group_lanes; //get_active_lane_count(activemask);
+  uint8_t my_logical_lane_id  = wf_info.pe_group_logical_lane_id; //get_active_lane_num(activemask);
+  bool is_leader              = {my_logical_lane_id == 0};
+  const uint64_t leader_phys_lane_id = wf_info.pe_group_leader_phys_lane_id; //get_first_active_lane_id(activemask);
 
   while (true) {
     bool done{false};
@@ -122,7 +122,7 @@ __device__ void QueuePair::mlx5_quiet() {
 }
 
 __device__ __forceinline__ void QueuePair::mlx5_wait_for_free_sq_slots(
-    uint64_t wave_sq_counter, uint8_t num_active_lanes) {
+    uint64_t wave_sq_counter, ActiveWFInfo &wf_info) {
   while (true) {
     uint64_t db_touched = __hip_atomic_load(&sq_db_touched,
                           __ATOMIC_RELAXED, __HIP_MEMORY_SCOPE_AGENT);
@@ -143,13 +143,13 @@ __device__ __forceinline__ void QueuePair::mlx5_wait_for_free_sq_slots(
         static_cast<uint64_t>(num_active_sq_entries);
 
     uint64_t num_entries_until_wave_last_entry =
-        wave_sq_counter + num_active_lanes - db_touched;
+        wave_sq_counter + wf_info.num_pe_group_lanes - db_touched;
 
     if (num_free_entries > num_entries_until_wave_last_entry) {
       break;
     }
 
-    mlx5_quiet();
+    mlx5_quiet(wf_info);
   }
 }
 
@@ -180,7 +180,7 @@ __device__ __forceinline__ void QueuePair::mlx5_wait_for_db_touched_eq(
   } while (db_touched != target_sq_counter);
 }
 
-__device__ __forceinline__ void QueuePair::mlx5_ring_doorbell(
+__device__ __forceinline__ void QueuePair::mlx5_sq_ring_doorbell(
     uint64_t wave_sq_counter, uint8_t num_wqes) {
   mlx5_wait_for_db_touched_eq(wave_sq_counter);
 
@@ -199,13 +199,15 @@ __device__ __forceinline__ void QueuePair::mlx5_ring_doorbell(
 }
 
 __device__ void QueuePair::mlx5_post_wqe_rma(int32_t size, uintptr_t laddr,
-    uintptr_t raddr, uint8_t opcode) {
-  uint64_t activemask          = get_active_lane_mask();
-  uint8_t  num_active_lanes    = get_active_lane_count(activemask);
-  uint8_t  my_logical_lane_id  = get_active_lane_num(activemask);
+    uintptr_t raddr, uint8_t opcode, ActiveWFInfo &wf_info) {
+  uint64_t activemask          = wf_info.pe_group_mask; //get_active_lane_mask();
+  uint8_t  num_active_lanes    = wf_info.num_pe_group_lanes; //get_active_lane_count(activemask);
+  uint8_t  my_logical_lane_id  = wf_info.pe_group_logical_lane_id; //get_active_lane_num(activemask);
+  // TODO: update is_leader to use wf_info.is_pe_group_leader to avoid recomputation
   bool     is_leader           = {my_logical_lane_id == 0};
-  uint64_t leader_phys_lane_id = get_first_active_lane_id(activemask);
+  uint64_t leader_phys_lane_id = wf_info.pe_group_leader_phys_lane_id; //get_first_active_lane_id(activemask);
 
+  // TODO: num_wqes == num_actives_lanes, (redundant variable)
   uint8_t  num_wqes        = num_active_lanes;
   uint64_t wave_sq_counter = 0;
   uint64_t my_sq_counter   = 0;
@@ -221,7 +223,7 @@ __device__ void QueuePair::mlx5_post_wqe_rma(int32_t size, uintptr_t laddr,
   my_sq_index     = my_sq_counter % sq_wqe_cnt;
 
   // 2. Wait for SQ space for the whole wave
-  mlx5_wait_for_free_sq_slots(wave_sq_counter, num_active_lanes);
+  mlx5_wait_for_free_sq_slots(wave_sq_counter, wf_info);
 
   // 3. Build the WQE for this lane
   mlx5_build_rma_wqe(my_sq_counter, my_sq_index, laddr, raddr, size, opcode);
@@ -230,7 +232,7 @@ __device__ void QueuePair::mlx5_post_wqe_rma(int32_t size, uintptr_t laddr,
 
   // 4. Leader rings doorbell for the wave
   if (is_leader) {
-    mlx5_ring_doorbell(wave_sq_counter, num_wqes);
+    mlx5_sq_ring_doorbell(wave_sq_counter, num_wqes);
   }
 }
 
@@ -274,12 +276,13 @@ __device__ __forceinline__ void QueuePair::mlx5_build_amo_wqe(
 
 __device__ uint64_t QueuePair::mlx5_post_wqe_amo(int32_t size,
     uintptr_t raddr, uint8_t opcode, int64_t atomic_data,
-    int64_t atomic_cmp, bool fetching) {
-  uint64_t activemask          = get_active_lane_mask();
-  uint8_t  num_active_lanes    = get_active_lane_count(activemask);
-  uint8_t  my_logical_lane_id  = get_active_lane_num(activemask);
+    int64_t atomic_cmp, bool fetching, ActiveWFInfo &wf_info) {
+  uint64_t activemask          = wf_info.pe_group_mask; //get_active_lane_mask();
+  uint8_t  num_active_lanes    = wf_info.num_pe_group_lanes; //get_active_lane_count(activemask);
+  uint8_t  my_logical_lane_id  = wf_info.pe_group_logical_lane_id; //get_active_lane_num(activemask);
+  // TODO: update is_leader to use wf_info.is_pe_group_leader to avoid recomputation
   bool     is_leader           = {my_logical_lane_id == 0};
-  uint64_t leader_phys_lane_id = get_first_active_lane_id(activemask);
+  uint64_t leader_phys_lane_id = wf_info.pe_group_leader_phys_lane_id; //get_first_active_lane_id(activemask);
 
   uint8_t  num_wqes        = num_active_lanes;
   uint64_t wave_sq_counter = 0;
@@ -296,7 +299,7 @@ __device__ uint64_t QueuePair::mlx5_post_wqe_amo(int32_t size,
   my_sq_index     = my_sq_counter % sq_wqe_cnt;
 
   // 2. Wait for SQ space for the whole wave
-  mlx5_wait_for_free_sq_slots(wave_sq_counter, num_active_lanes);
+  mlx5_wait_for_free_sq_slots(wave_sq_counter, wf_info);
 
   uint64_t* wave_fetch_atomic{nullptr};
   if (fetching) {
@@ -315,13 +318,13 @@ __device__ uint64_t QueuePair::mlx5_post_wqe_amo(int32_t size,
 
   // 4. Leader rings doorbell for the wave
   if (is_leader) {
-    mlx5_ring_doorbell(wave_sq_counter, num_wqes);
+    mlx5_sq_ring_doorbell(wave_sq_counter, num_wqes);
   }
 
   // 5. Fetch result if requested
   uint64_t ret{0};
   if (fetching) {
-    mlx5_quiet();
+    mlx5_quiet(wf_info);
     ret = wave_fetch_atomic[my_logical_lane_id];
 
     __atomic_signal_fence(__ATOMIC_SEQ_CST);

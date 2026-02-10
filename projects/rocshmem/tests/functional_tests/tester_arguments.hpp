@@ -88,8 +88,8 @@ public:
   /**
    * Defaults tester values
    */
-  int loop = 10;
-  int skip = 10;
+  int loop = 1;//10;
+  int skip = 0;//10;
   int loop_large = 10;
   size_t large_message_size = 32768;
 

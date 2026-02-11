@@ -3041,9 +3041,6 @@ void VirtualGPU::submitMapMemory(amd::MapMemoryCommand& cmd) {
 
 // ================================================================================================
 void VirtualGPU::submitUnmapMemory(amd::UnmapMemoryCommand& cmd) {
-  bool unmapMip = false;
-  amd::Image* image = nullptr;
-  {
   // Make sure VirtualGPU has an exclusive access to the resources
   amd::ScopedLock lock(execution());
 
@@ -3057,8 +3054,9 @@ void VirtualGPU::submitUnmapMemory(amd::UnmapMemoryCommand& cmd) {
 
   profilingBegin(cmd, true);
 
+  bool unmapMip = false;
   // Check if image is a mipmap and assign a saved view
-  image = devMemory->owner()->asImage();
+  amd::Image* image = devMemory->owner()->asImage();
   if (image && (image->getMipLevels() > 1) &&
       (mapInfo->baseMip_ != nullptr)) {
     // Assign mip leveled view
@@ -3146,10 +3144,10 @@ void VirtualGPU::submitUnmapMemory(amd::UnmapMemoryCommand& cmd) {
   devMemory->clearUnmapInfo(cmd.mapPtr());
 
   profilingEnd();
-  }
+
   if (unmapMip) {
     // The leveled view can be released when cmd is finished
-    image>release();
+    image->release();
   }
 }
 

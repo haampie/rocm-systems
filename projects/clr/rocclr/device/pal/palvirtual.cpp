@@ -1774,6 +1774,8 @@ void VirtualGPU::submitUnmapMemory(amd::UnmapMemoryCommand& vcmd) {
       memory = dev().getGpuMemory(amdImage);
       unmapMip = true;
       writeMapInfo = memory->writeMapInfo(vcmd.mapPtr());
+      // Let cmd own the leveled view
+      vcmd.updateMemory(amdImage);
     }
 
     // We used host memory

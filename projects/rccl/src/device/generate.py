@@ -79,11 +79,22 @@ is_colltrace       = 1 if sys.argv[3] == "ON" else 0
 is_msccl_kernels   = 1 if sys.argv[4] == "ON" else 0
 is_local_arch_only = 1 if sys.argv[5] == "ON" else 0
 
-func_pattern = sys.argv[6:7]
+# ENABLE_ROCSHMEM (argv[6]) and optionally ONLY_FUNCS (argv[7]); CMake always passes both when using this script
+if len(sys.argv) >= 7:
+  is_rocshmem = 1 if sys.argv[6] == "ON" else 0
+  func_pattern = sys.argv[7:8] if len(sys.argv) >= 8 else []
+else:
+  is_rocshmem = 0
+  func_pattern = sys.argv[6:7]
+
 if func_pattern and func_pattern[0]:
   func_pattern = func_pattern[0]
 else:
-  func_pattern = "AllGather|AllReduce|AlltoAllPivot|AllToAllGda|Broadcast|Reduce|ReduceScatter|SendRecv"
+  # GDA (rocSHMEM-based) kernels only when rocshmem build requested
+  if is_rocshmem:
+    func_pattern = "AllGather|AllReduce|AlltoAllPivot|AllToAllGda|Broadcast|Reduce|ReduceScatter|SendRecv"
+  else:
+    func_pattern = "AllGather|AllReduce|AlltoAllPivot|Broadcast|Reduce|ReduceScatter|SendRecv"
 
 ################################################################################
 
@@ -226,11 +237,16 @@ def calc_unroll_and_pipeline_for_local_arch():
 # except for gfx950. For gfx950, we also disable pipelining.
 local_unroll, local_pipeline = calc_unroll_and_pipeline_for_local_arch()
 
+# rocSHMEM/GDA-based collectives: only generated when ENABLE_ROCSHMEM build is requested
+gda_colls = {"AllToAllGda"}
+
 # Helper function to check if the conditions for the collective is being met
 def func_validate(coll, algo, proto, redop, ty, acc,  pipeline, unroll):
   if redop == "SumPostDiv" and ty[0] not in ("i","u"):
     return False
   if coll == "" or algo == "":
+    return False
+  if not is_rocshmem and coll in gda_colls:
     return False
   if (algo not in algos_of_coll[coll] or
       proto not in protos_of_coll[coll] or

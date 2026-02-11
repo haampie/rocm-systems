@@ -38,7 +38,7 @@ THE SOFTWARE.
 #endif
 
 #include <type_traits>
-#include <cstddef>
+
 namespace cooperative_groups {
 
 /** \brief The base type of all cooperative group types.

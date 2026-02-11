@@ -111,6 +111,8 @@ struct agent_pools_t{
 };
 
 extern size_t pool_size_limit;
+extern bool use_binary_search_alloc;  // Enable optimized binary search for max allocation test
+extern size_t max_single_alloc_gb;    // Cap maximum single allocation test size (GB)
 
 bool isEmuModeEnabled();
 

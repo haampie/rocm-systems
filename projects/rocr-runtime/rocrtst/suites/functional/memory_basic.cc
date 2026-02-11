@@ -248,26 +248,86 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   uint64_t lower_bound = 0;
   auto max_alloc_size = upper_bound;
 
-  while (true) {
-    err = TestAllocate(pool, max_alloc_size * gran_sz);
-    ASSERT_TRUE(err == HSA_STATUS_SUCCESS ||
-                err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
-                err == HSA_STATUS_ERROR_INVALID_ALLOCATION);
-    if (err == HSA_STATUS_SUCCESS) {
-      break;
-    } else if (err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
-               err == HSA_STATUS_ERROR_INVALID_ALLOCATION) {
-      upper_bound = max_alloc_size;
-      max_alloc_size =
-          static_cast<uint64_t>(max_alloc_size * 0.99);  // Reduce by 1% in each iteration
+  // Check if user requested optimized binary search via environment variable
+  if (rocrtst::use_binary_search_alloc) {
+    // OPTIMIZED BINARY SEARCH PATH
+    // Cap maximum test size if requested to prevent extremely long test times
+    if (is_system_ram && rocrtst::max_single_alloc_gb > 0) {
+      const uint64_t max_test_granules =
+          (rocrtst::max_single_alloc_gb * 1024 * 1024) / (gran_sz / 1024);
+      if (upper_bound > max_test_granules) {
+        if (verbosity() > 0) {
+          std::cout << "  Note: Capping test to " << rocrtst::max_single_alloc_gb
+                    << "GB per ROCRTST_MAX_SINGLE_ALLOC_GB" << std::endl;
+        }
+        upper_bound = max_test_granules;
+        max_alloc_size = upper_bound;
+      }
     }
 
-    ASSERT_GT(upper_bound, lower_bound);
+    // Binary search to find maximum allocatable size
+    uint64_t iteration = 0;
+    const uint64_t MAX_BINARY_SEARCH_ITERS = 64;
+
+    if (verbosity() > 1) {
+      std::cout << "  Using optimized binary search (range: 0 - "
+                << (upper_bound * gran_sz) / (1024 * 1024) << "MB)" << std::endl;
+    }
+
+    while (upper_bound - lower_bound > 1 && iteration < MAX_BINARY_SEARCH_ITERS) {
+      max_alloc_size = (upper_bound + lower_bound) / 2;
+
+      if (verbosity() > 1) {
+        std::cout << "    [" << iteration << "/" << MAX_BINARY_SEARCH_ITERS << "] Testing "
+                  << (max_alloc_size * gran_sz) / (1024 * 1024) << "MB..." << std::flush;
+      }
+
+      err = TestAllocate(pool, max_alloc_size * gran_sz);
+      ASSERT_TRUE(err == HSA_STATUS_SUCCESS || err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
+                  err == HSA_STATUS_ERROR_INVALID_ALLOCATION);
+
+      if (err == HSA_STATUS_SUCCESS) {
+        lower_bound = max_alloc_size;
+        if (verbosity() > 1) {
+          std::cout << " SUCCESS" << std::endl;
+        }
+      } else {
+        upper_bound = max_alloc_size;
+        if (verbosity() > 1) {
+          std::cout << " TOO BIG" << std::endl;
+        }
+      }
+      iteration++;
+    }
+
+    // Final allocation at lower_bound (last known successful size)
+    max_alloc_size = lower_bound;
+    if (max_alloc_size > 0) {
+      err = TestAllocate(pool, max_alloc_size * gran_sz);
+      ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+    }
+  } else {
+    // DEFAULT LINEAR SEARCH PATH
+    while (true) {
+      err = TestAllocate(pool, max_alloc_size * gran_sz);
+      ASSERT_TRUE(err == HSA_STATUS_SUCCESS || err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
+                  err == HSA_STATUS_ERROR_INVALID_ALLOCATION);
+      if (err == HSA_STATUS_SUCCESS) {
+        break;
+      } else if (err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
+                 err == HSA_STATUS_ERROR_INVALID_ALLOCATION) {
+        upper_bound = max_alloc_size;
+        max_alloc_size =
+            static_cast<uint64_t>(max_alloc_size * 0.99);  // Reduce by 1% in each iteration
+      }
+
+      ASSERT_GT(upper_bound, lower_bound);
+    }
   }
 
   if (verbosity() > 0) {
-    std::cout << "  Biggest single allocation size for this pool is " <<
-                        (max_alloc_size * gran_sz)/1024 << "KB." << std::endl;
+    std::cout << "  Biggest single allocation size for this pool is "
+              << (max_alloc_size * gran_sz) / 1024 << "KB." << std::endl;
     std::cout << "  This is " <<
                   static_cast<float>(max_alloc_size)/pool_sz*100 <<
                                                "% of the total." << std::endl;

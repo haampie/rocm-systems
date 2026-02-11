@@ -63,6 +63,8 @@ namespace rocrtst {
 }
 
 size_t pool_size_limit = 0;
+bool use_binary_search_alloc = false;
+size_t max_single_alloc_gb = 0;
 
 bool isEmuModeEnabled() {
   auto checkMode = []{ 
@@ -441,6 +443,36 @@ hsa_status_t AcquirePoolInfo(hsa_amd_memory_pool_t pool,
         << pool_size_limit << " reported:" << pool_i->size << ")" << std::endl;
     }
     pool_i->size = pool_size_limit;
+  }
+
+  // Parse binary search optimization flag
+  use_binary_search_alloc = (getenv("ROCRTST_USE_BINARY_SEARCH") != nullptr);
+
+  // Parse maximum single allocation test size cap
+  max_single_alloc_gb = 0;
+  char* max_alloc_str = getenv("ROCRTST_MAX_SINGLE_ALLOC_GB");
+  if (max_alloc_str) {
+    char* end;
+    max_single_alloc_gb = strtoul(max_alloc_str, &end, 10);
+  }
+
+  // If binary search is enabled but no cap was specified, set a reasonable default
+  if (use_binary_search_alloc && max_single_alloc_gb == 0) {
+    // Calculate pool size in GB
+    size_t pool_size_gb = pool_i->size / (1024UL * 1024UL * 1024UL);
+
+    // Use 128GB or 20% of pool size, whichever is smaller (minimum 64GB for large pools)
+    const size_t DEFAULT_MAX_TEST_SIZE_GB = 128;
+    const size_t percent_based_limit = pool_size_gb / 5;  // 20% of pool
+
+    if (pool_size_gb > 320) {  // Only apply cap for pools > 320GB
+      max_single_alloc_gb =
+          std::min(DEFAULT_MAX_TEST_SIZE_GB, std::max((size_t)64, percent_based_limit));
+
+      std::cout << "Info: ROCRTST_USE_BINARY_SEARCH enabled without "
+                << "ROCRTST_MAX_SINGLE_ALLOC_GB. Defaulting to " << max_single_alloc_gb
+                << "GB cap for this pool." << std::endl;
+    }
   }
 
   err = hsa_amd_memory_pool_get_info(pool,

@@ -28,7 +28,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from utils.utils import METRIC_ID_RE
+from utils.utils import METRIC_ID_RE, resolve_rocm_library_path
 
 
 def validate_block(value: str) -> str:
@@ -432,12 +432,14 @@ Examples:
     )
     profile_group.add_argument(
         "--rocprofiler-sdk-tool-path",
-        type=str,
+        type=resolve_rocm_library_path,
         dest="rocprofiler_sdk_tool_path",
         required=False,
-        default=str(
-            Path(os.getenv("ROCM_PATH", "/opt/rocm"))
-            / "lib/rocprofiler-sdk/librocprofiler-sdk-tool.so"
+        default=resolve_rocm_library_path(
+            str(
+                Path(os.getenv("ROCM_PATH", "/opt/rocm"))
+                / "lib/rocprofiler-sdk/librocprofiler-sdk-tool.so"
+            )
         ),
         help="\t\t\tSet the path to rocprofiler-sdk tool.",
     )
